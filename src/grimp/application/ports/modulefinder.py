@@ -22,6 +22,7 @@ class FoundPackage:
     name: str
     directory: str
     module_files: Set[ModuleFile]
+    namespace_packages: Set[str] = frozenset()
 
 
 class AbstractModuleFinder(abc.ABC):
