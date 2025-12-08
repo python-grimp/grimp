@@ -938,6 +938,46 @@ def test_exclude_type_checking_imports(
     assert {module_foo_one_file: expected_result} == result
 
 
+def test_t_string_syntax():
+    module_file_to_scan = _module_to_module_file(Module("foo.one"))
+
+    all_module_files = frozenset({module_file_to_scan, _module_to_module_file(Module("foo.two"))})
+    file_system = rust.FakeBasicFileSystem(
+        content_map={
+            "/path/to/foo/one.py": """
+                import foo.two
+                # t-strings are only valid in Python 3.14+
+                hello = t"Hello"
+            """
+        }
+    )
+
+    with override_settings(FILE_SYSTEM=file_system):
+        result = scanning.scan_imports(
+            {module_file_to_scan},
+            found_packages={
+                FoundPackage(
+                    name="foo",
+                    directory="/path/to/foo",
+                    module_files=all_module_files,
+                )
+            },
+            include_external_packages=False,
+            exclude_type_checking_imports=False,
+        )
+
+    assert result == {
+        module_file_to_scan: {
+            DirectImport(
+                importer=Module("foo.one"),
+                imported=Module("foo.two"),
+                line_number=1,
+                line_contents="import foo.two",
+            ),
+        }
+    }
+
+
 def _module_to_module_file(module: Module) -> ModuleFile:
     some_mtime = 100933.4
     return ModuleFile(module=module, mtime=some_mtime)
