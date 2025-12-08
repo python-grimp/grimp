@@ -80,7 +80,7 @@ impl<'a> StatementVisitor<'a> for Visitor<'a> {
                 let line_number = self.source_code.line_index(import_stmt.range.start());
                 for name in import_stmt.names.iter() {
                     self.imported_objects.push(ImportedObject::new(
-                        name.name.id.clone(),
+                        name.name.id.to_string(),
                         line_number.get(),
                         self.source_code.line_text(line_number).trim().to_string(),
                         self.typechecking_only,
