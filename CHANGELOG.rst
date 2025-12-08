@@ -7,6 +7,7 @@ latest
 
 * Drop support for Python 3.9.
 * Bugfix: don't treat t-strings as syntax errors. https://github.com/python-grimp/grimp/issues/268
+* Support building graph from namespace packages, not just their portions.
 
 3.13 (2025-10-29)
 -----------------
