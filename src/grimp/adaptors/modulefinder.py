@@ -74,7 +74,7 @@ class ModuleFinder(modulefinder.AbstractModuleFinder):
                 # a Python file somewhere within it.
                 candidate_namespace_dirs.append(dirpath)
 
-            # Don't include hidden directories.
+            # Don't include directories that aren't valid identifiers.
             dirs_to_remove = [d for d in dirs if self._should_ignore_dir(d)]
             for d in dirs_to_remove:
                 dirs.remove(d)
@@ -91,8 +91,7 @@ class ModuleFinder(modulefinder.AbstractModuleFinder):
 
     def _should_ignore_dir(self, directory: str) -> bool:
         # TODO: make this configurable.
-        # Skip adding directories that are hidden.
-        return directory.startswith(".")
+        return not directory.isidentifier()
 
     def _determine_namespace_dirs(
         self, candidates: Iterable[str], python_files: Iterable[str]

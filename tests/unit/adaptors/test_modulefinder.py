@@ -181,6 +181,60 @@ def test_ignores_orphaned_python_files():
     )
 
 
+def test_ignores_invalid_identifier_directories():
+    # Python files in directories that don't contain an __init__.py should not be discovered.
+    module_finder = ModuleFinder()
+
+    file_system = FakeFileSystem(
+        contents="""
+            /path/to/namespacepackage/
+                foo/
+                    valid_underscore_name/
+                        __init__.py
+                        mod.py
+                    invalid-hyphenated-name/
+                        __init__.py
+                        mod.py
+                    1nvalid-number-prefixed/
+                        __init__.py
+                        mod.py
+                    valid_non_àscii/
+                        __init__.py
+                        mod.py
+                    invalid_non_😃scii/
+                        __init__.py
+                        mod.py
+                bar/
+                    __init__.py
+                    mod.py
+            """
+    )
+
+    result = module_finder.find_package(
+        package_name="namespacepackage",
+        package_directory="/path/to/namespacepackage",
+        file_system=file_system,
+    )
+
+    module_files = {
+        ModuleFile(module=Module(name), mtime=DEFAULT_MTIME)
+        for name in {
+            "namespacepackage.foo.valid_underscore_name",
+            "namespacepackage.foo.valid_underscore_name.mod",
+            "namespacepackage.foo.valid_non_àscii",
+            "namespacepackage.foo.valid_non_àscii.mod",
+            "namespacepackage.bar",
+            "namespacepackage.bar.mod",
+        }
+    }
+    assert result == FoundPackage(
+        name="namespacepackage",
+        directory="/path/to/namespacepackage",
+        module_files=module_files,
+        namespace_packages=frozenset({"namespacepackage", "namespacepackage.foo"}),
+    )
+
+
 @pytest.mark.parametrize(
     "extension, should_warn",
     (
