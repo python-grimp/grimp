@@ -197,13 +197,21 @@ def test_import_within_nested_namespace_child():
     )
 
 
-def test_import_between_nested_namespace_children():
-    graph = build_graph(
-        "nestednamespace.foo.alpha.blue",
-        "nestednamespace.foo.alpha.green",
-        "nestednamespace.bar.beta",
-        cache_dir=None,
-    )
+@pytest.mark.parametrize(
+    "root_packages",
+    (
+        # As namespace root.
+        ("nestednamespace",),
+        # As portions.
+        (
+            "nestednamespace.foo.alpha.blue",
+            "nestednamespace.foo.alpha.green",
+            "nestednamespace.bar.beta",
+        ),
+    ),
+)
+def test_import_between_nested_namespace_children(root_packages):
+    graph = build_graph(*root_packages, cache_dir=None)
 
     assert graph.direct_import_exists(
         importer="nestednamespace.foo.alpha.green.one",
