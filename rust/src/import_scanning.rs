@@ -58,6 +58,9 @@ fn get_modules_from_found_packages(found_packages: &HashSet<FoundPackage>) -> Ha
         for module_file in &package.module_files {
             modules.insert(module_file.module.clone());
         }
+        for namespace_module in &package.namespace_packages {
+            modules.insert(namespace_module.clone());
+        }
     }
     modules
 }

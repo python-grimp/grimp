@@ -27,6 +27,7 @@ pub struct FoundPackage {
     pub directory: String,
     // BTreeSet rather than HashSet is necessary to make FoundPackage hashable.
     pub module_files: BTreeSet<ModuleFile>,
+    pub namespace_packages: BTreeSet<Module>,
 }
 
 /// Implements conversion from a Python 'FoundPackage' object to the Rust 'FoundPackage' struct.
@@ -41,20 +42,36 @@ impl<'py> FromPyObject<'py> for FoundPackage {
         // Access the 'module_files' attribute.
         let module_files_py = ob.getattr("module_files")?;
         // Downcast the PyAny object to a PyFrozenSet, as Python 'FrozenSet' maps to 'PyFrozenSet'.
-        let py_frozen_set = module_files_py.downcast::<PyFrozenSet>()?;
+        let module_files_frozenset = module_files_py.downcast::<PyFrozenSet>()?;
 
         let mut module_files = BTreeSet::new();
         // Iterate over the Python frozenset.
-        for py_module_file_any in py_frozen_set.iter() {
+        for py_module_file_any in module_files_frozenset.iter() {
             // Extract each element (PyAny) into a Rust 'ModuleFile'.
             let module_file: ModuleFile = py_module_file_any.extract()?;
             module_files.insert(module_file);
+        }
+
+        // Access the 'namespace_packages' attribute.
+        let namespace_packages_py = ob.getattr("namespace_packages")?;
+        // Downcast the PyAny object to a PyFrozenSet, as Python 'FrozenSet' maps to 'PyFrozenSet'.
+        let namespace_packages_frozenset = namespace_packages_py.downcast::<PyFrozenSet>()?;
+
+        let mut namespace_packages = BTreeSet::new();
+        // Iterate over the Python frozenset.
+        for py_namespace_any in namespace_packages_frozenset.iter() {
+            // Extract each element (PyAny) into a Rust 'ModuleFile'.
+            let namespace_package: String = py_namespace_any.extract()?;
+            namespace_packages.insert(Module {
+                name: namespace_package,
+            });
         }
 
         Ok(FoundPackage {
             name,
             directory,
             module_files,
+            namespace_packages,
         })
     }
 }

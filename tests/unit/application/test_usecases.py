@@ -183,6 +183,9 @@ class TestBuildGraph:
                         __init__.py
                         four.py
                 """,
+            content_map={
+                "/path/to/mypackage/foo/one.py": "import mypackage\nfrom . import two",
+            },
         )
 
         class FakePackageFinder(BaseFakePackageFinder):
@@ -190,7 +193,7 @@ class TestBuildGraph:
                 "mypackage": {
                     "/path/to/mypackage",
                     "/different-path/to/mypackage",
-                }
+                },
             }
 
         with override_settings(FILE_SYSTEM=file_system, PACKAGE_FINDER=FakePackageFinder()):
@@ -207,4 +210,8 @@ class TestBuildGraph:
             "mypackage.bar.three",
             "mypackage.foobar",
             "mypackage.foobar.four",
+        }
+        assert graph.find_modules_directly_imported_by("mypackage.foo.one") == {
+            "mypackage",
+            "mypackage.foo.two",
         }
