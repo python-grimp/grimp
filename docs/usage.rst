@@ -57,19 +57,20 @@ Building the graph
     Build and return an ImportGraph for the supplied package or packages.
 
     :param str package_name: The name of an importable package, for example ``'mypackage'``. For regular packages, this
-        must be the top level package (i.e. one with no dots in its name). However, in the special case of
-        `namespace packages`_, the name of the *portion* should be supplied, for example ``'mynamespace.foo'``.
+        must be the top level package (i.e. one with no dots in its name). In the special case of
+        `namespace packages`_, the name of the *portion* may be supplied instead, for example ``'mynamespace.foo'``.
+        If the portion is supplied, its ancestor packages will not be included in the graph.
     :param tuple[str, ...] additional_package_names: Tuple of any additional package names. These can be
         supplied as positional arguments, as in the example above.
     :param bool, optional include_external_packages: Whether to include external packages in the import graph. If this is ``True``,
         any other top level packages (including packages in the standard library) that are imported by this package will
         be included in the graph as squashed modules (see `Terminology`_ above).
 
-        The behaviour is more complex if one of the internal packages is a `namespace portion`_.
+        The behaviour is more complex if one of the specified packages is a `namespace portion`_.
         In this case, the squashed module will have the shallowest name that doesn't clash with any internal modules.
         For example, in a graph with internal packages ``namespace.foo`` and ``namespace.bar.one.green``,
         ``namespace.bar.one.orange.alpha`` would be added to the graph as ``namespace.bar.one.orange``. However, in a graph
-        with only ``namespace.foo`` as an internal package, the same external module would be added as
+        with only ``namespace.foo`` passed, the same external module would be added as
         ``namespace.bar``.
 
         *Note: external packages are only analysed as modules that are imported; any imports they make themselves will

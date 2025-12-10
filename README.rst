@@ -114,20 +114,37 @@ You may analyse multiple root packages. To do this, pass each package name as a 
 Namespace packages
 ------------------
 
-Graphs can also be built from `portions`_ of `namespace packages`_. To do this, provide the portion name, rather than the namespace name::
-
-    >>> graph = grimp.build_graph('somenamespace.foo')
+Graphs can be built either from `namespace packages`_ or from their `portions`_.
 
 What's a namespace package?
 ###########################
 
-Namespace packages are a Python feature allows subpackages to be distributed independently, while still importable under a shared namespace. This is, for example, used by `the Python client for Google's Cloud Logging API`_. When installed, it is importable in Python as ``google.cloud.logging``. The parent packages ``google`` and ``google.cloud`` are both namespace packages, while ``google.cloud.logging`` is known as the 'portion'. Other portions in the same namespace can be installed separately, for example ``google.cloud.secretmanager``.
+Namespace packages are a Python feature allows subpackages to be distributed independently, while
+still importable under a shared namespace.
 
-Grimp expects the package name passed to ``build_graph`` to be a portion, rather than a namespace package. So in the case of the example above, the graph should be built like so::
+This is used by
+`the Python client for Google's Cloud Logging API`_, for example. When installed, it is importable
+in Python as ``google.cloud.logging``. The parent packages ``google`` and ``google.cloud`` are both namespace
+packages, while ``google.cloud.logging`` is known as the 'portion'. Other portions in the same
+namespace can be installed separately, for example ``google.cloud.secretmanager``.
 
-    >>> graph = grimp.build_graph('google.cloud.logging')
+Examples::
 
-If, instead, a namespace package is passed (e.g. ``grimp.build_graph('google.cloud')``), Grimp will raise ``NamespacePackageEncountered``.
+    # In this one, the portion is supplied. Neither "google" nor "google.cloud"
+    # will appear in the graph.
+    >>> graph = grimp.build_graph("google.cloud.logging")
+
+    # In this one, a namespace is supplied.
+    # Neither "google" nor "google.cloud" will appear in the graph,
+    # as will other installed packages under the "google" namespace such
+    # as "google.auth".
+    >>> graph = grimp.build_graph("google")
+
+    # This one supplies a subnamespace of "google" - it will include
+    # "google.cloud.logging" and "google.cloud.secretmanager" but not "google.auth".
+    >>> graph = grimp.build_graph("google.cloud")
+
+
 
 .. _portions: https://docs.python.org/3/glossary.html#term-portion
 .. _namespace packages: https://docs.python.org/3/glossary.html#term-namespace-package

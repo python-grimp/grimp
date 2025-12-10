@@ -32,7 +32,7 @@ def build_graph(
 
     Args:
         - package_name: the name of the top level package for which to build the graph.
-        - additional_package_names: tuple of the
+        - additional_package_names: tuple of additional packages to build the graph from.
         - include_external_packages: whether to include any external packages in the graph.
         - exclude_type_checking_imports: whether to exclude imports made in type checking guards.
         - cache_dir: The directory to use for caching the graph.
