@@ -40,7 +40,14 @@ Before requesting a review
 - Ensure you have included tests that cover the change. In general, aim for full test coverage at the Python level.
   Rust tests are optional.
 - Update documentation when there's a new API, functionality etc.
-- Add a note to ``CHANGELOG.rst`` about the changes.
+- Add a note to ``CHANGELOG.rst`` about the changes, in the imperative mood. This should go under
+  the main page title, under a ``latest`` section. If it's not there already, create it. E.g.::
+
+      latest
+      ------
+
+      * Add new feature.
+
 - Add yourself to ``AUTHORS.rst``.
 - Run ``just full-check`` locally. (If you're a new contributor, CI checks are not run automatically.)
 
