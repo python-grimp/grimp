@@ -25,39 +25,20 @@ compile-and-test:
 test-rust:
     @cargo test --no-default-features
 
-# Runs tests under the default Python version.
+# Runs Python tests.
 [group('testing')]
-test-python:
+test-python $UV_PYTHON=env("UV_PYTHON", ""):
     @uv run pytest --benchmark-skip
 
 # Runs tests under all supported Python versions, plus Rust.
 [group('testing')]
-test-all: test-python-3-10 test-python-3-11 test-python-3-12 test-python-3-13 test-python-3-14 test-rust
-
-# Runs tests under Python 3.10.
-[group('testing')]
-test-python-3-10:
-    UV_PYTHON=3.10 just test-python
-
-# Runs tests under Python 3.11.
-[group('testing')]
-test-python-3-11:
-    UV_PYTHON=3.11 just test-python
-
-# Runs tests under Python 3.12.
-[group('testing')]
-test-python-3-12:
-    UV_PYTHON=3.12 just test-python
-
-# Runs tests under Python 3.13.
-[group('testing')]
-test-python-3-13:
-    UV_PYTHON=3.13 just test-python
-
-# Runs tests under Python 3.14.
-[group('testing')]
-test-python-3-14:
-    UV_PYTHON=3.14 just test-python
+test-all:
+    just test-python 3.10
+    just test-python 3.11
+    just test-python 3.12
+    just test-python 3.13
+    just test-python 3.14
+    just test-rust
 
 # Populate missing Syrupy snapshots.
 [group('testing')]

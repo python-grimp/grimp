@@ -3,9 +3,10 @@ Changelog
 =========
 
 latest
-----------------
+------
 
 * Improve contribution experience for Windows developers using Just.
+* Tweak Just commands for running version-specific Python tests.
 
 3.14 (2025-12-10)
 -----------------
