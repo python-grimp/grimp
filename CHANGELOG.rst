@@ -7,6 +7,7 @@ latest
 
 * Improve contribution experience for Windows developers using Just.
 * Tweak Just commands for running version-specific Python tests.
+* Remove `typing-extensions` as a dependency.
 
 3.14 (2025-12-10)
 -----------------
