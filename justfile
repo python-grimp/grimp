@@ -32,12 +32,7 @@ test-python:
 
 # Runs tests under all supported Python versions, plus Rust.
 [group('testing')]
-test-all: test-python-3-9 test-python-3-10 test-python-3-11 test-python-3-12 test-python-3-13 test-python-3-14 test-rust
-
-# Runs tests under Python 3.9.
-[group('testing')]
-test-python-3-9:
-    UV_PYTHON=3.9 just test-python
+test-all: test-python-3-10 test-python-3-11 test-python-3-12 test-python-3-13 test-python-3-14 test-rust
 
 # Runs tests under Python 3.10.
 [group('testing')]
