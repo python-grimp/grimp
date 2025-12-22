@@ -67,6 +67,9 @@ benchmark_ci = [
     "pytest-codspeed>=4.2.0",
 ]
 
+[tool.pytest.ini_options]
+xfail_strict = true
+
 [tool.setuptools]
 include-package-data = true
 zip-safe = false
