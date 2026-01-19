@@ -11,3 +11,4 @@ Authors
 * Andreas Rammhold - https://github.com/andir
 * Nicholas Bunn - https://github.com/NicholasBunn
 * Nathan McDougall - https://github.com/nathanjmcdougall
+* Oleksandr Zaiats - https://github.com/z4y4ts
