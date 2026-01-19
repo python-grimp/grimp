@@ -37,7 +37,9 @@ class CacheFileNamer:
         # Use a hash algorithm with a limited size to avoid cache filenames that are too long
         # the filesystem, which can happen if there are more than a few root packages
         # being analyzed.
-        safe_unicode_identifier = hashlib.blake2b(bytes_identifier, digest_size=20, usedforsecurity=False).hexdigest()
+        safe_unicode_identifier = hashlib.blake2b(
+            bytes_identifier, digest_size=20, usedforsecurity=False
+        ).hexdigest()
         return f"{safe_unicode_identifier}.data.json"
 
     @classmethod
