@@ -60,6 +60,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Test Python
+        env:
+          PYTHON_GIL: ${{ matrix.experimental == true && '0' || '1' }}
         run: just test-python
 
       - name: Test Rust
