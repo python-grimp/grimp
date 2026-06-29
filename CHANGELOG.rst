@@ -10,6 +10,9 @@ latest
 * Tweak Just commands for running version-specific Python tests.
 * Remove `typing-extensions` as a dependency.
 * Make package FIPS compatible by marking blake2 hashing with `usedforsecurity=False`.
+* Raise `ModuleNotPresent` instead of an unclear error when `find_modules_that_directly_import` or
+  `find_modules_directly_imported_by` is called with a module that is not in the graph.
+  (https://github.com/python-grimp/grimp/issues/113)
 
 3.14 (2025-12-10)
 -----------------
