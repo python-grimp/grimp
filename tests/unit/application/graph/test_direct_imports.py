@@ -3,7 +3,7 @@ import re
 import pytest
 
 from grimp.application.graph import ImportGraph
-from grimp.exceptions import InvalidImportExpression
+from grimp.exceptions import InvalidImportExpression, ModuleNotPresent
 
 
 def test_find_modules_directly_imported_by():
@@ -32,6 +32,22 @@ def test_find_modules_that_directly_import():
     graph.add_import(importer=f, imported=b)
 
     assert {a, f} == graph.find_modules_that_directly_import("bar")
+
+
+def test_find_modules_directly_imported_by_raises_module_not_present():
+    graph = ImportGraph()
+    graph.add_module("foo")
+
+    with pytest.raises(ModuleNotPresent, match=re.escape('"bar" not present in the graph.')):
+        graph.find_modules_directly_imported_by("bar")
+
+
+def test_find_modules_that_directly_import_raises_module_not_present():
+    graph = ImportGraph()
+    graph.add_module("foo")
+
+    with pytest.raises(ModuleNotPresent, match=re.escape('"bar" not present in the graph.')):
+        graph.find_modules_that_directly_import("bar")
 
 
 @pytest.mark.parametrize(

@@ -217,13 +217,26 @@ class ImportGraph:
         )
 
     def find_modules_directly_imported_by(self, module: str) -> set[str]:
+        """
+        Find all modules that are directly imported by the supplied module.
+
+        If the module is not present in the graph, grimp.exceptions.ModuleNotPresent will be raised.
+        """
+        if not self._rustgraph.contains_module(module):
+            msg = f'"{module}" not present in the graph.'
+            raise ModuleNotPresent(msg)
         return self._rustgraph.find_modules_directly_imported_by(module)
 
     def find_modules_that_directly_import(self, module: str) -> set[str]:
-        if self._rustgraph.contains_module(module):
-            # TODO panics if module isn't in modules.
-            return self._rustgraph.find_modules_that_directly_import(module)
-        return set()
+        """
+        Find all modules that directly import the supplied module.
+
+        If the module is not present in the graph, grimp.exceptions.ModuleNotPresent will be raised.
+        """
+        if not self._rustgraph.contains_module(module):
+            msg = f'"{module}" not present in the graph.'
+            raise ModuleNotPresent(msg)
+        return self._rustgraph.find_modules_that_directly_import(module)
 
     def get_import_details(self, *, importer: str, imported: str) -> list[DetailedImport]:
         """
