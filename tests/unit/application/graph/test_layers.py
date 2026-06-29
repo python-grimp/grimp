@@ -840,6 +840,62 @@ class TestInvalidContainers:
             )
 
 
+class TestInvalidLayers:
+    def test_module_in_multiple_layers_raises_value_error(self):
+        graph = ImportGraph()
+        graph.add_module("mypackage")
+        graph.add_module("mypackage.foo")
+        graph.add_module("mypackage.bar")
+
+        with pytest.raises(
+            ValueError,
+            match=re.escape(
+                "Modules can only belong to one layer, but the following appear in "
+                "more than one: 'mypackage.foo'."
+            ),
+        ):
+            graph.find_illegal_dependencies_for_layers(
+                layers=("mypackage.foo", "mypackage.bar", "mypackage.foo"),
+            )
+
+    def test_module_shared_across_sibling_layers_raises_value_error(self):
+        graph = ImportGraph()
+
+        with pytest.raises(
+            ValueError,
+            match=re.escape(
+                "Modules can only belong to one layer, but the following appear in "
+                "more than one: 'shared'."
+            ),
+        ):
+            graph.find_illegal_dependencies_for_layers(
+                layers=(Layer("high", "shared"), Layer("shared", "low")),
+            )
+
+    def test_multiple_duplicate_modules_raises_value_error(self):
+        graph = ImportGraph()
+
+        with pytest.raises(
+            ValueError,
+            match=re.escape(
+                "Modules can only belong to one layer, but the following appear in "
+                "more than one: 'blue', 'red', 'yellow'."
+            ),
+        ):
+            graph.find_illegal_dependencies_for_layers(
+                layers=(
+                    Layer("one", "blue"),
+                    Layer("blue", "two", "three", "yellow"),
+                    # Note that green doesn't cause an error as these are stored as a set.
+                    Layer("green", "four", "green"),
+                    Layer("five"),
+                    Layer("red"),
+                    Layer("yellow"),
+                    Layer("red"),
+                ),
+            )
+
+
 # TODO: move test to within Rust.
 @pytest.mark.skip(reason="This only passes if run on its own, due to pyo3_log caching.")
 class TestLogging:

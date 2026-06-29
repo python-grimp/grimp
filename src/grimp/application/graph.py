@@ -446,9 +446,11 @@ class ImportGraph:
             lower layer (the 'upstream') to the higher layer (the 'downstream').
 
         Raises:
+            ValueError: if the same module is assigned to more than one layer.
             NoSuchContainer: if the container is not a module in the graph.
         """
         layers = _parse_layers(layers)
+        _check_layers_do_not_share_modules(layers)
         try:
             result = self._rustgraph.find_illegal_dependencies_for_layers(
                 layers=tuple(
@@ -529,6 +531,30 @@ def _parse_layers(layers: Sequence[Layer | str | set[str]]) -> tuple[Layer, ...]
         else:
             out_layers.append(Layer(*tuple(layer)))
     return tuple(out_layers)
+
+
+def _check_layers_do_not_share_modules(layers: tuple[Layer, ...]) -> None:
+    """
+    Raise ValueError if any module is assigned to more than one layer.
+
+    A module cannot sit at two different levels at once. Without this guard a
+    repeated module surfaces as an unhelpful panic from the underlying Rust
+    extension rather than a clear error.
+    """
+    seen = set()
+    duplicates = set()
+
+    flattened_modules = [module for layer in layers for module in layer.module_tails]
+    for module in flattened_modules:
+        if module in seen:
+            duplicates.add(module)
+        else:
+            seen.add(module)
+
+    if duplicates:
+        formatted = ", ".join(repr(module) for module in sorted(duplicates))
+        msg = f"Modules can only belong to one layer, but the following appear in more than one: {formatted}."
+        raise ValueError(msg)
 
 
 def _dependencies_from_tuple(
