@@ -13,6 +13,8 @@ latest
 * Raise `ModuleNotPresent` instead of an unclear error when `find_modules_that_directly_import` or
   `find_modules_directly_imported_by` is called with a module that is not in the graph.
   (https://github.com/python-grimp/grimp/issues/113)
+* Raise `ValueError` instead of pyo3_runtime.PanicException when a duplicate layer
+  module is passed to `find_illegal_dependencies_for_layers`.
 
 3.14 (2025-12-10)
 -----------------
