@@ -127,14 +127,10 @@ impl<'a> StatementVisitor<'a> for Visitor<'a> {
                         walk_stmt(self, stmt);
                     }
                 }
-                Expr::Attribute(expr) => {
-                    if expr.attr.id == "TYPE_CHECKING" {
-                        self.typechecking_only = true;
-                        walk_stmt(self, stmt);
-                        self.typechecking_only = false;
-                    } else {
-                        walk_stmt(self, stmt);
-                    }
+                Expr::Attribute(expr) if expr.attr.id == "TYPE_CHECKING" => {
+                    self.typechecking_only = true;
+                    walk_stmt(self, stmt);
+                    self.typechecking_only = false;
                 }
                 _ => {
                     walk_stmt(self, stmt);
