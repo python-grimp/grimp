@@ -48,8 +48,8 @@ class FakeFileSystem(AbstractFileSystem):
         """
         self.contents = self._parse_contents(contents)
         self._raw_contents = contents
-        self.content_map = content_map if content_map else {}
-        self.mtime_map: dict[str, float] = mtime_map if mtime_map else {}
+        self.content_map = content_map or {}
+        self.mtime_map: dict[str, float] = mtime_map or {}
 
     @property
     def sep(self) -> str:
