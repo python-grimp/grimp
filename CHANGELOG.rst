@@ -2,8 +2,8 @@
 Changelog
 =========
 
-latest
-------
+3.15 (2026-07-03)
+-----------------
 
 * Deprecate the `NamespacePackageEncountered` exception.
 * Improve contribution experience for Windows developers using Just.
