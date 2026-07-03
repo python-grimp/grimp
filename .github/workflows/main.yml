@@ -74,7 +74,7 @@ jobs:
             python-version: 3.14
 
         - name: Update to a Cargo version that supports 2024 edition
-          run: rustup install 1.90.0 && rustup default 1.90.0
+          run: rustup install 1.96.1 && rustup default 1.96.1
           
         - name: Run benchmarks
           uses: CodSpeedHQ/action@v4
