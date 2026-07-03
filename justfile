@@ -22,7 +22,7 @@ compile-and-test:
 # Runs the Rust tests.
 [group('testing')]
 [working-directory: 'rust']
-test-rust:
+test-rust $PYO3_PYTHON=`uv python find`:
     @cargo test --no-default-features
 
 # Runs Python tests.

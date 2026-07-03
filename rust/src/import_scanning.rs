@@ -18,8 +18,10 @@ pub struct DirectImport {
     pub line_contents: String,
 }
 
-impl<'py> FromPyObject<'py> for DirectImport {
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for DirectImport {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
         let importer: String = ob.getattr("importer")?.getattr("name")?.extract()?;
         let imported: String = ob.getattr("imported")?.getattr("name")?.extract()?;
         let line_number: usize = ob.getattr("line_number")?.extract()?;
@@ -36,7 +38,7 @@ impl<'py> FromPyObject<'py> for DirectImport {
 
 fn py_found_packages_to_rust(py_found_packages: &Bound<'_, PyAny>) -> HashSet<FoundPackage> {
     let py_set = py_found_packages
-        .downcast::<PySet>()
+        .cast::<PySet>()
         .expect("Expected py_found_packages to be a Python set.");
 
     let mut rust_found_packages = HashSet::new();

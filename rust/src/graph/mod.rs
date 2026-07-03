@@ -74,7 +74,7 @@ pub struct Graph {
     import_details: FxHashMap<(ModuleToken, ModuleToken), FxHashSet<PyImportDetails>>,
 }
 
-#[pyclass(name = "Graph")]
+#[pyclass(name = "Graph", from_py_object)]
 #[derive(Clone)]
 pub struct GraphWrapper {
     _graph: Graph,
@@ -115,7 +115,7 @@ impl GraphWrapper {
         for container in containers {
             let mut levels: Vec<Level> = vec![];
             for pylevel in pylevels.into_iter() {
-                let level_dict = pylevel.downcast::<PyDict>().unwrap();
+                let level_dict = pylevel.cast::<PyDict>().unwrap();
                 let layers = level_dict
                     .get_item("layers")
                     .unwrap()
