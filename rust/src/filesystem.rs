@@ -29,7 +29,7 @@ pub trait FileSystem: Send + Sync {
 }
 
 #[derive(Clone)]
-#[pyclass]
+#[pyclass(from_py_object)]
 struct RealBasicFileSystem {}
 
 // Implements a BasicFileSystem (defined in grimp.application.ports.filesystem.BasicFileSystem)

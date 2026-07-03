@@ -5,7 +5,7 @@ use crate::module_finding::Module;
 use pyo3::types::PyAnyMethods;
 use pyo3::types::{PyDict, PySet};
 use pyo3::types::{PyDictMethods, PySetMethods};
-use pyo3::{Bound, FromPyObject, PyAny, PyResult, Python, pyfunction};
+use pyo3::{Borrowed, Bound, FromPyObject, PyAny, PyErr, PyResult, Python, pyfunction};
 use std::collections::{HashMap, HashSet};
 
 /// Writes the cache file containing all the imports for a given package.
@@ -53,14 +53,16 @@ pub fn read_cache_data_map_file<'py>(
 /// A newtype wrapper for HashMap<Module, HashSet<DirectImport>> that implements FromPyObject.
 pub struct ImportsByModule(pub HashMap<Module, HashSet<DirectImport>>);
 
-impl<'py> FromPyObject<'py> for ImportsByModule {
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
-        let py_dict = ob.downcast::<PyDict>()?;
+impl<'a, 'py> FromPyObject<'a, 'py> for ImportsByModule {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
+        let py_dict = ob.cast::<PyDict>()?;
         let mut imports_by_module_rust = HashMap::new();
 
         for (py_key, py_value) in py_dict.iter() {
             let module: Module = py_key.extract()?;
-            let py_set = py_value.downcast::<PySet>()?;
+            let py_set = py_value.cast::<PySet>()?;
             let mut hashset: HashSet<DirectImport> = HashSet::new();
             for element in py_set.iter() {
                 let direct_import: DirectImport = element.extract()?;

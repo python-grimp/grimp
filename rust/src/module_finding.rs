@@ -32,9 +32,10 @@ pub struct FoundPackage {
 
 /// Implements conversion from a Python 'FoundPackage' object to the Rust 'FoundPackage' struct.
 /// It extracts 'name', 'directory', and converts the 'module_files' frozenset into a Rust BTreeSet.
-impl<'py> FromPyObject<'py> for FoundPackage {
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
-        // Extract the 'name' attribute.
+impl<'a, 'py> FromPyObject<'a, 'py> for FoundPackage {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
         let name: String = ob.getattr("name")?.extract()?;
         // Extract the 'directory' attribute.
         let directory: String = ob.getattr("directory")?.extract()?;
@@ -42,7 +43,7 @@ impl<'py> FromPyObject<'py> for FoundPackage {
         // Access the 'module_files' attribute.
         let module_files_py = ob.getattr("module_files")?;
         // Downcast the PyAny object to a PyFrozenSet, as Python 'FrozenSet' maps to 'PyFrozenSet'.
-        let module_files_frozenset = module_files_py.downcast::<PyFrozenSet>()?;
+        let module_files_frozenset = module_files_py.cast::<PyFrozenSet>()?;
 
         let mut module_files = BTreeSet::new();
         // Iterate over the Python frozenset.
@@ -55,7 +56,7 @@ impl<'py> FromPyObject<'py> for FoundPackage {
         // Access the 'namespace_packages' attribute.
         let namespace_packages_py = ob.getattr("namespace_packages")?;
         // Downcast the PyAny object to a PyFrozenSet, as Python 'FrozenSet' maps to 'PyFrozenSet'.
-        let namespace_packages_frozenset = namespace_packages_py.downcast::<PyFrozenSet>()?;
+        let namespace_packages_frozenset = namespace_packages_py.cast::<PyFrozenSet>()?;
 
         let mut namespace_packages = BTreeSet::new();
         // Iterate over the Python frozenset.
