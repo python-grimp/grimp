@@ -38,6 +38,7 @@ test-all:
     just test-python 3.12
     just test-python 3.13
     just test-python 3.14
+    just test-python 3.14t
     just test-rust
 
 # Populate missing Syrupy snapshots.
