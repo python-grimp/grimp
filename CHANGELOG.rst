@@ -7,7 +7,8 @@ latest
 
 * Fix panic error when scanning imports of nonexistent namespace children
   (https://github.com/python-grimp/grimp/issues/308).
-* Officially support freethreaded Python 3.14.
+* Officially support freethreaded Python 3.14+.
+* Officially support Python 3.15, including lazy imports.
 
 3.15 (2026-07-03)
 -----------------
