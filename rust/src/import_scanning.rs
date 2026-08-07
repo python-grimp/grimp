@@ -330,6 +330,12 @@ fn _distill_external_module(
             while external_path_components[0] == internal_path_components[0] {
                 external_namespace_components.push(external_path_components.remove(0));
                 internal_path_components.remove(0);
+                if internal_path_components.is_empty() {
+                    // The module name is a descendant of the found package, but isn't present
+                    // as a module file. If that's the case, don't add it to the graph, as it's
+                    // a missing module.
+                    return None;
+                };
             }
             external_namespace_components.push(external_path_components[0]);
 

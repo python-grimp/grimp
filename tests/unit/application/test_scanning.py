@@ -971,6 +971,51 @@ def test_t_string_syntax():
     }
 
 
+@pytest.mark.parametrize(
+    "import_statement",
+    (
+        "from namespace.portion.nonexistent import something",
+        "from .nonexistent import something",
+        "from ..nonexistent import something",
+    ),
+)
+def test_missing_module_in_dotted_root_package_is_ignored(import_statement: str):
+    """
+    When a dotted root package (namespace package) contains an import of a missing module
+    within that same package, and include_external_packages=True, the Rust code should not
+    panic with an index-out-of-bounds error.
+
+    Regression test for https://github.com/python-grimp/grimp/issues/308.
+    """
+    module_to_scan = Module("namespace.portion.subpackage.importer")
+    module_file_to_scan = _module_to_module_file(module_to_scan)
+    all_modules = {
+        Module("namespace.portion"),
+        Module("namespace.portion.subpackage"),
+        module_to_scan,
+    }
+    file_system = rust.FakeBasicFileSystem(
+        content_map={"/path/to/namespace/portion/subpackage/importer.py": import_statement},
+    )
+    found_packages = {
+        FoundPackage(
+            name="namespace.portion",
+            directory="/path/to/namespace/portion",
+            module_files=_modules_to_module_files(all_modules),
+        )
+    }
+
+    with override_settings(FILE_SYSTEM=file_system):
+        result = scanning.scan_imports(
+            {module_file_to_scan},
+            found_packages=found_packages,
+            include_external_packages=True,
+            exclude_type_checking_imports=False,  # Required field, not relevant.
+        )
+
+    assert result == {module_file_to_scan: set()}
+
+
 def _module_to_module_file(module: Module) -> ModuleFile:
     some_mtime = 100933.4
     return ModuleFile(module=module, mtime=some_mtime)
