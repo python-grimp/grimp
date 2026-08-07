@@ -118,6 +118,7 @@ pub fn parse_json_to_map(
                 imported,
                 line_number,
                 line_contents,
+                is_lazy: false,  // TODO get working with cache.
             })
             .collect();
         parsed_map.insert(module, import_set);

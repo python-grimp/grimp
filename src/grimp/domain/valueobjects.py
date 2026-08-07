@@ -55,9 +55,12 @@ class DirectImport:
     imported: Module
     line_number: int
     line_contents: str
+    # Import in the form `lazy import` or `lazy from import`.
+    is_lazy: bool = False
 
     def __str__(self) -> str:
-        return f"{self.importer} -> {self.imported} (l. {self.line_number})"
+        lazy_label = ", lazy" if self.is_lazy else ""
+        return f"{self.importer} -> {self.imported} (l. {self.line_number}{lazy_label})"
 
 
 @dataclass(frozen=True, order=True)

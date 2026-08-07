@@ -16,6 +16,7 @@ pub struct DirectImport {
     pub imported: String,
     pub line_number: usize,
     pub line_contents: String,
+    pub is_lazy: bool,
 }
 
 impl<'a, 'py> FromPyObject<'a, 'py> for DirectImport {
@@ -26,12 +27,14 @@ impl<'a, 'py> FromPyObject<'a, 'py> for DirectImport {
         let imported: String = ob.getattr("imported")?.getattr("name")?.extract()?;
         let line_number: usize = ob.getattr("line_number")?.extract()?;
         let line_contents: String = ob.getattr("line_contents")?.extract()?;
+        let is_lazy: bool = ob.getattr("is_lazy")?.extract()?;
 
         Ok(DirectImport {
             importer,
             imported,
             line_number,
             line_contents,
+            is_lazy,
         })
     }
 }
@@ -152,6 +155,7 @@ fn scan_for_imports_no_py_single_module(
                     imported: imported_module.name.to_string(),
                     line_number: imported_object.line_number,
                     line_contents: imported_object.line_contents,
+                    is_lazy: imported_object.is_lazy,
                 });
             }
             None => {
@@ -165,6 +169,7 @@ fn scan_for_imports_no_py_single_module(
                         imported: imported_module,
                         line_number: imported_object.line_number,
                         line_contents: imported_object.line_contents,
+                        is_lazy: imported_object.is_lazy,
                     });
                 }
             }
@@ -195,6 +200,9 @@ fn to_py_direct_imports<'a>(
             .unwrap();
         kwargs
             .set_item("line_contents", &rust_import.line_contents)
+            .unwrap();
+        kwargs
+            .set_item("is_lazy", &rust_import.is_lazy)
             .unwrap();
         let py_direct_import = py_direct_import_class.call((), Some(&kwargs)).unwrap();
         pyset.add(&py_direct_import).unwrap();
