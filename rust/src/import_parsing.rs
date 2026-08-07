@@ -10,6 +10,7 @@ pub struct ImportedObject {
     pub line_number: usize,
     pub line_contents: String,
     pub typechecking_only: bool,
+    pub is_lazy: bool,
 }
 
 impl ImportedObject {
@@ -18,12 +19,14 @@ impl ImportedObject {
         line_number: usize,
         line_contents: String,
         typechecking_only: bool,
+        is_lazy: bool,
     ) -> Self {
         Self {
             name,
             line_number,
             line_contents,
             typechecking_only,
+            is_lazy,
         }
     }
 }
@@ -84,6 +87,7 @@ impl<'a> StatementVisitor<'a> for Visitor<'a> {
                         line_number.get(),
                         self.source_code.line_text(line_number).trim().to_string(),
                         self.typechecking_only,
+                        import_stmt.is_lazy,
                     ))
                 }
                 walk_stmt(self, stmt);
@@ -113,6 +117,7 @@ impl<'a> StatementVisitor<'a> for Visitor<'a> {
                         line_number.get(),
                         self.source_code.line_text(line_number).trim().to_string(),
                         self.typechecking_only,
+                        import_from_stmt.is_lazy,
                     ))
                 }
                 walk_stmt(self, stmt);
