@@ -79,6 +79,3 @@ rust/debug
 rust/target
 rust/flamegraph.svg
 target
-
-# UV
-uv.lock
