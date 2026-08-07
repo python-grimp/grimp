@@ -81,6 +81,143 @@ def test_absolute_imports(include_external_packages, expected_result):
     assert {module_file_to_scan: expected_result} == result
 
 
+def test_lazy_imports():
+    module_file_to_scan = _module_to_module_file(Module("foo.one.blue"))
+    all_modules = {
+        Module("foo"),
+        Module("foo.one"),
+        Module("foo.one.blue"),
+        Module("foo.one.green"),
+        Module("foo.two"),
+        Module("foo.two.brown"),
+        Module("foo.two.yellow"),
+        Module("foo.three"),
+    }
+    file_system = rust.FakeBasicFileSystem(
+        contents="""
+            /path/to/foo/
+                __init__.py
+                one/
+                    __init__.py
+                    blue.py
+                    green.py
+                two/
+                    __init__.py
+                    brown.py
+                    yellow.py
+                three.py
+        """,
+        content_map={
+            "/path/to/foo/one/blue.py": """
+                # Absolute no-from
+                lazy import foo.two
+                lazy import externalone
+                lazy import externaltwo.subpackage  # with comment afterwards.
+                arbitrary_expression = 1
+
+                # Absolute from
+                lazy from foo.one import green
+                lazy from foo.two import yellow
+                if t.TYPE_CHECKING:
+                    lazy from foo import three
+                lazy from external import one
+                lazy from external.two import blue  # with comment afterwards.
+
+                # Relative from
+                lazy from . import green
+                lazy from ..two import yellow
+                lazy from .. import three
+            """
+        },
+    )
+
+    with override_settings(FILE_SYSTEM=file_system):
+        result = scanning.scan_imports(
+            {module_file_to_scan},
+            found_packages={
+                FoundPackage(
+                    name="foo",
+                    directory="/path/to/foo",
+                    module_files=_modules_to_module_files(all_modules),
+                )
+            },
+            include_external_packages=True,
+            exclude_type_checking_imports=False,
+        )
+
+    expected = {
+        module_file_to_scan: {
+            DirectImport(
+                importer=Module("foo.one.blue"),
+                imported=Module("foo.two"),
+                line_number=2,
+                line_contents="lazy import foo.two",
+            ),
+            DirectImport(
+                importer=Module("foo.one.blue"),
+                imported=Module("externalone"),
+                line_number=3,
+                line_contents="lazy import externalone",
+            ),
+            DirectImport(
+                importer=Module("foo.one.blue"),
+                imported=Module("externaltwo"),
+                line_number=4,
+                line_contents="lazy import externaltwo.subpackage  # with comment afterwards.",
+            ),
+            DirectImport(
+                importer=Module("foo.one.blue"),
+                imported=Module("foo.one.green"),
+                line_number=8,
+                line_contents="lazy from foo.one import green",
+            ),
+            DirectImport(
+                importer=Module("foo.one.blue"),
+                imported=Module("foo.two.yellow"),
+                line_number=9,
+                line_contents="lazy from foo.two import yellow",
+            ),
+            DirectImport(
+                importer=Module("foo.one.blue"),
+                imported=Module("foo.three"),
+                line_number=11,
+                line_contents="lazy from foo import three",
+            ),
+            DirectImport(
+                importer=Module("foo.one.blue"),
+                imported=Module("external"),
+                line_number=12,
+                line_contents="lazy from external import one",
+            ),
+            DirectImport(
+                importer=Module("foo.one.blue"),
+                imported=Module("external"),
+                line_number=13,
+                line_contents="lazy from external.two import blue  # with comment afterwards.",
+            ),
+            DirectImport(
+                importer=Module("foo.one.blue"),
+                imported=Module("foo.one.green"),
+                line_number=16,
+                line_contents="lazy from . import green",
+            ),
+            DirectImport(
+                importer=Module("foo.one.blue"),
+                imported=Module("foo.two.yellow"),
+                line_number=17,
+                line_contents="lazy from ..two import yellow",
+            ),
+            DirectImport(
+                importer=Module("foo.one.blue"),
+                imported=Module("foo.three"),
+                line_number=18,
+                line_contents="lazy from .. import three",
+            ),
+        }
+    }
+    assert result == expected
+
+
 def test_non_ascii():
     blue_module = Module("mypackage.blue")
     blue_module_file = _module_to_module_file(blue_module)
