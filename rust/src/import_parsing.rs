@@ -96,15 +96,15 @@ impl<'a> StatementVisitor<'a> for Visitor<'a> {
                             format!(
                                 "{}{}.{}",
                                 ".".repeat(import_from_stmt.level as usize),
-                                &module.id,
-                                &name.name.id
+                                module.id,
+                                name.name.id
                             )
                         }
                         None => {
                             format!(
                                 "{}{}",
                                 ".".repeat(import_from_stmt.level as usize),
-                                &name.name.id
+                                name.name.id
                             )
                         }
                     };
