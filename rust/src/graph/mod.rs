@@ -229,7 +229,7 @@ impl GraphWrapper {
             if self.is_module_squashed(&ancestor_module).unwrap_or(false) {
                 return Err(PyValueError::new_err(format!(
                     "Module is a descendant of squashed module {}.",
-                    &ancestor_module,
+                    ancestor_module,
                 )));
             };
         }
