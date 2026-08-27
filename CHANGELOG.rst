@@ -9,6 +9,7 @@ latest
   (https://github.com/python-grimp/grimp/issues/308).
 * Officially support freethreaded Python 3.14+.
 * Officially support Python 3.15, including lazy imports.
+* Officially support Windows ARM64 Python 3.11+, including freethreaded 3.14+.
 
 3.15 (2026-07-03)
 -----------------
