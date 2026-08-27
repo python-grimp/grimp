@@ -12,3 +12,4 @@ Authors
 * Nicholas Bunn - https://github.com/NicholasBunn
 * Nathan McDougall - https://github.com/nathanjmcdougall
 * Oleksandr Zaiats - https://github.com/z4y4ts
+* Nikhil Dabas - https://github.com/ndabas
