@@ -106,32 +106,45 @@ jobs:
         platform:
           - runner: windows-latest
             target: x64
+            interpreters: &interpreters '["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]'
+            free-threaded-interpreters: &free-threaded-interpreters '["3.14t", "3.15t"]'
           - runner: windows-latest
             target: x86
+            interpreters: *interpreters
+            free-threaded-interpreters: *free-threaded-interpreters
+          # setup-python has no Windows ARM64 builds before 3.11.
           - runner: windows-11-arm
             target: aarch64
+            interpreters: '["3.11", "3.12", "3.13", "3.14", "3.15"]'
+            free-threaded-interpreters: *free-threaded-interpreters
     steps:
       - uses: actions/checkout@v5
+
+      # https://github.com/pyo3/maturin-action#windows-build-the-regular-and-free-threaded-interpreters-in-separate-jobs
       - uses: actions/setup-python@v6
         with:
-          # CPython has no official Windows ARM64 build before 3.11.
-          python-version: |
-            ${{ matrix.platform.target != 'aarch64' && '3.10' || '' }}
-            3.11
-            3.12
-            3.13
-            3.14
-            3.14t
-            3.15
-            3.15t
+          python-version: ${{ join(fromJSON(matrix.platform.interpreters), fromJSON('"\n"')) }}
           allow-prereleases: true
           architecture: ${{ matrix.platform.target == 'aarch64' && 'arm64' || matrix.platform.target }}
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist --interpreter ${{ join(fromJSON(matrix.platform.interpreters), ' ') }}
           sccache: 'true'
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ join(fromJSON(matrix.platform.free-threaded-interpreters), fromJSON('"\n"')) }}
+          allow-prereleases: true
+          architecture: ${{ matrix.platform.target == 'aarch64' && 'arm64' || matrix.platform.target }}
+      - name: Build free-threaded wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist --interpreter ${{ join(fromJSON(matrix.platform.free-threaded-interpreters), ' ') }}
+          sccache: 'true'
+
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
