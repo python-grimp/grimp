@@ -2,8 +2,8 @@
 Changelog
 =========
 
-latest
-------
+3.16 (2026-08-28)
+-----------------
 
 * Fix panic error when scanning imports of nonexistent namespace children
   (https://github.com/python-grimp/grimp/issues/308).

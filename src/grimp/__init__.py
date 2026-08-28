@@ -1,4 +1,4 @@
-__version__ = "3.15"
+__version__ = "3.16"
 
 from .application.graph import DetailedImport, Import, ImportGraph
 from .domain.analysis import PackageDependency, Route
