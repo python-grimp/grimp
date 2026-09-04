@@ -2,6 +2,12 @@
 Changelog
 =========
 
+latest
+------
+
+* Raise ``ValueError`` instead of panicking when ``Graph.add_import`` is called with only one of
+  ``line_number`` and ``line_contents``.
+
 3.16 (2026-08-28)
 -----------------
 

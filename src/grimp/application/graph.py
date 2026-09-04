@@ -142,6 +142,9 @@ class ImportGraph:
         """
         Add a direct import between two modules to the graph. If the modules are not already
         present, they will be added to the graph.
+
+        Raises:
+            ValueError if only one of line_number and line_contents is supplied.
         """
         self._cached_modules = None
         self._rustgraph.add_import(
