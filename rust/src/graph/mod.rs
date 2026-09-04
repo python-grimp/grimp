@@ -264,27 +264,39 @@ impl GraphWrapper {
         Ok(self.get_visible_module_by_name(module)?.is_squashed())
     }
 
-    #[pyo3(signature = (*, importer, imported, line_number=None, line_contents=None))]
+    #[pyo3(signature = (*, importer, imported, is_lazy=None, line_number=None, line_contents=None))]
     pub fn add_import(
         &mut self,
         importer: &str,
         imported: &str,
+        is_lazy: Option<bool>,
         line_number: Option<u32>,
         line_contents: Option<&str>,
     ) -> PyResult<()> {
-        match (line_number, line_contents) {
-            (Some(line_number), Some(line_contents)) => {
-                let importer = self._graph.get_or_add_module(importer).token();
-                let imported = self._graph.get_or_add_module(imported).token();
-                self._graph
-                    .add_detailed_import(importer, imported, line_number, line_contents);
-            }
-            (None, None) => {
+        match (line_number, line_contents, is_lazy) {
+            (None, None, None) => {
                 let importer = self._graph.get_or_add_module(importer).token();
                 let imported = self._graph.get_or_add_module(imported).token();
                 self._graph.add_import(importer, imported);
             }
-            _ => {
+            (Some(line_number), Some(line_contents), is_lazy) => {
+                let is_lazy = is_lazy.unwrap_or(false);
+                let importer = self._graph.get_or_add_module(importer).token();
+                let imported = self._graph.get_or_add_module(imported).token();
+                self._graph.add_detailed_import(
+                    importer,
+                    imported,
+                    line_number,
+                    line_contents,
+                    is_lazy,
+                );
+            }
+            (_, _, Some(_is_lazy)) => {
+                return Err(PyValueError::new_err(
+                    "You must provide line_number and line_contents when providing is_lazy.",
+                ));
+            }
+            (_, _, None) => {
                 return Err(PyValueError::new_err(
                     "Expected line_number and line_contents, or neither.",
                 ));
@@ -406,6 +418,7 @@ impl GraphWrapper {
                         imported.name(),
                         import_details.line_number(),
                         import_details.line_contents(),
+                        import_details.is_lazy(),
                     )
                 })
                 .sorted()
@@ -421,6 +434,7 @@ impl GraphWrapper {
                             "line_contents",
                             import_details.line_contents.into_py_any(py).unwrap(),
                         ),
+                        ("is_lazy", import_details.is_lazy.into_py_any(py).unwrap()),
                     ]
                     .into_py_dict(py)
                     .unwrap()
@@ -671,6 +685,7 @@ struct ImportDetails {
     imported: String,
     line_number: u32,
     line_contents: String,
+    is_lazy: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, new)]
@@ -758,6 +773,9 @@ pub struct PyImportDetails {
 
     #[getset(get_copy = "pub")]
     interned_line_contents: DefaultSymbol,
+
+    #[getset(get_copy = "pub")]
+    is_lazy: bool,
 }
 
 impl PyImportDetails {

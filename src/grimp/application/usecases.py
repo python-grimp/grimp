@@ -184,6 +184,7 @@ def _assemble_graph(
                 imported=direct_import.imported.name,
                 line_number=direct_import.line_number,
                 line_contents=direct_import.line_contents,
+                is_lazy=direct_import.is_lazy,
             )
     return graph
 

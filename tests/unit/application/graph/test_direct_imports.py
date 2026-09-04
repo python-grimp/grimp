@@ -230,12 +230,14 @@ class TestGetImportDetails:
             dict(
                 importer="mypackage.foo",
                 imported="mypackage.bar",
+                is_lazy=False,
                 line_number=1,
                 line_contents="from . import bar",
             ),
             dict(
                 importer="mypackage.foo",
                 imported="mypackage.bar",
+                is_lazy=True,
                 line_number=10,
                 line_contents="from .bar import a_function",
             ),
@@ -267,6 +269,7 @@ class TestGetImportDetails:
             dict(
                 importer="mypackage.foo",
                 imported="mypackage.bar",
+                is_lazy=False,
                 line_number=1,
                 line_contents="from . import bar",
             )

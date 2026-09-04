@@ -33,6 +33,7 @@ class TestDirectImport:
             line_contents="import bar",
         )
         assert str(import_path) == "foo -> bar (l. 10)"
+
     def test_lazy_str(self):
         import_path = DirectImport(
             importer=Module("foo"),

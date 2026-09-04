@@ -201,9 +201,7 @@ fn to_py_direct_imports<'a>(
         kwargs
             .set_item("line_contents", &rust_import.line_contents)
             .unwrap();
-        kwargs
-            .set_item("is_lazy", &rust_import.is_lazy)
-            .unwrap();
+        kwargs.set_item("is_lazy", rust_import.is_lazy).unwrap();
         let py_direct_import = py_direct_import_class.call((), Some(&kwargs)).unwrap();
         pyset.add(&py_direct_import).unwrap();
     }

@@ -517,6 +517,7 @@ class TestFindShortestChains:
             {
                 "importer": "green.foo",
                 "imported": "blue.bar",
+                "is_lazy": False,
                 "line_contents": "import blue.bar",
                 "line_number": 5,
             }

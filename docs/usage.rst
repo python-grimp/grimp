@@ -164,7 +164,7 @@ Methods for analysing direct imports
 
     This method should not be used to determine whether an import is present:
     some of the imports in the graph may have no available metadata. For example, if an import
-    has been added by the ``add_import`` method without the ``line_number`` and ``line_contents`` specified, then
+    has been added by the ``add_import`` method without the optional arguments, then
     calling this method on the import will return an empty list. If you want to know whether the import is present,
     use ``direct_import_exists``.
 
@@ -174,6 +174,7 @@ Methods for analysing direct imports
             {
                 'importer': 'mypackage.importer',
                 'imported': 'mypackage.imported',
+                'is_lazy': False,
                 'line_number': 5,
                 'line_contents': 'from mypackage import imported',
             },
@@ -185,6 +186,7 @@ Methods for analysing direct imports
     :param str importer: A module name.
     :param str imported: A module name.
     :return: A list of any available metadata for imports between two modules.
+        The ``is_lazy`` item indicates whether the import is an `explicit lazy import`_.
     :rtype: List of dictionaries with the structure shown above. If you want to use type annotations, you may use the
         ``grimp.DetailedImport`` TypedDict for each dictionary.
 
@@ -560,18 +562,23 @@ Methods for manipulating the graph
     :param str module: The name of a module, for example ``'mypackage.foo'``.
     :return: None
 
-.. py:function:: ImportGraph.add_import(importer, imported, line_number=None, line_contents=None)
+.. py:function:: ImportGraph.add_import(importer, imported, is_lazy=False, line_number=None, line_contents=None)
 
     Add a direct import between two modules to the graph. If the modules are not already
     present, they will be added to the graph.
 
+    The optional arguments containing the import details are intended to be called all together, or not at all,
+    though ``is_lazy`` is optional for backward compatibility. This data is available later via ``get_import_details``.
+
     :param str importer: The name of the module that is importing the other module.
     :param str imported: The name of the module being imported.
+    :param bool is_lazy: Whether the import is an explicit lazy import.
     :param int line_number: The line number of the import statement in the module.
     :param str line_contents: The line that contains the import statement.
     :return: None
 
-    :raises: ``ValueError`` if only one of ``line_number`` or ``line_contents`` is supplied.
+    :raises: ``ValueError`` if only one of ``line_number`` or ``line_contents`` is supplied,
+        or if ``is_lazy`` is supplied without ``line_number`` and ``line_contents``.
 
 .. py:function:: ImportGraph.remove_import(importer, imported)
 
@@ -621,3 +628,4 @@ Module expressions
 
 .. _namespace packages: https://docs.python.org/3/glossary.html#term-namespace-package
 .. _namespace portion: https://docs.python.org/3/glossary.html#term-portion
+.. _explicit lazy import: https://docs.python.org/3.15/reference/simple_stmts.html#lazy

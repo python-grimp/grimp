@@ -152,54 +152,66 @@ class TestCache:
                 "anotherpackage.modified": {SOME_MTIME}
             }}""",
             ".grimp_cache/mypackage.data.json": """{
-                "mypackage.foo.unmodified": [
-                    ["yellow", 11, "import yellow"], ["brown", 22, "import brown"]
-                ],
-                "mypackage.foo.modified": [
-                    ["stale", 33, "We should not use this cached value."]
-                ]
+                "version": 2,
+                "imports_by_module": {
+                    "mypackage.foo.unmodified": [
+                        ["yellow", false, 11, "import yellow"], ["brown", false, 22, "import brown"]
+                    ],
+                    "mypackage.foo.modified": [
+                        ["stale", false, 33, "We should not use this cached value."]
+                    ]
+                }
             }""",
             ".grimp_cache/mypackage:external.data.json": """{
-                "mypackage.foo.unmodified": [
-                    ["yellow", 11, "import yellow"],
-                    ["brown", 22, "import brown"],
-                    ["external", 100, "import external"]
-                ],
-                "mypackage.foo.modified": [
-                    ["stale", 33, "We should not use this cached value."]
-                ]
+                "version": 2,
+                "imports_by_module": {
+                    "mypackage.foo.unmodified": [
+                        ["yellow", false, 11, "import yellow"],
+                        ["brown", false, 22, "import brown"],
+                        ["external", false, 100, "import external"]
+                    ],
+                    "mypackage.foo.modified": [
+                        ["stale", false, 33, "We should not use this cached value."]
+                    ]
+                }
             }""",
             ".grimp_cache/anotherpackage,mypackage.data.json": """{
-                "mypackage.foo.unmodified": [
-                    ["yellow", 11, "import yellow"], ["brown", 22, "import brown"]
-                ],
-                "mypackage.foo.modified": [
-                    ["stale", 33, "We should not use this cached value."]
-                ],
-                "anotherpackage.unmodified": [
-                    ["purple", 11, "import purple"], ["green", 22, "import green"]
-                ],
-                "anotherpackage.modified": [
-                    ["stale", 33, "We should not use this cached value."]
-                ]
+                "version": 2,
+                "imports_by_module": {
+                    "mypackage.foo.unmodified": [
+                        ["yellow", false, 11, "import yellow"], ["brown", false, 22, "import brown"]
+                    ],
+                    "mypackage.foo.modified": [
+                        ["stale", false, 33, "We should not use this cached value."]
+                    ],
+                    "anotherpackage.unmodified": [
+                        ["purple", false, 11, "import purple"], ["green", false, 22, "import green"]
+                    ],
+                    "anotherpackage.modified": [
+                        ["stale", false, 33, "We should not use this cached value."]
+                    ]
+                }
             }""",
             ".grimp_cache/anotherpackage,mypackage:external.data.json": """{
-                "mypackage.foo.unmodified": [
-                    ["yellow", 11, "import yellow"],
-                    ["brown", 22, "import brown"],
-                    ["external", 100, "import external"]
-                ],
-                "mypackage.foo.modified": [
-                    ["stale", 33, "We should not use this cached value."]
-                ],
-                "anotherpackage.unmodified": [
-                    ["purple", 11, "import purple"],
-                    ["green", 22, "import green"],
-                    ["anotherexternal", 100, "import anotherexternal"]
-                ],
-                "anotherpackage.modified": [
-                    ["stale", 33, "We should not use this cached value."]
-                ]
+                "version": 2,
+                "imports_by_module": {
+                    "mypackage.foo.unmodified": [
+                        ["yellow", false, 11, "import yellow"],
+                        ["brown", false, 22, "import brown"],
+                        ["external", false, 100, "import external"]
+                    ],
+                    "mypackage.foo.modified": [
+                        ["stale", false, 33, "We should not use this cached value."]
+                    ],
+                    "anotherpackage.unmodified": [
+                        ["purple", false, 11, "import purple"],
+                        ["green", false, 22, "import green"],
+                        ["anotherexternal", false, 100, "import anotherexternal"]
+                    ],
+                    "anotherpackage.modified": [
+                        ["stale", false, 33, "We should not use this cached value."]
+                    ]
+                }
             }""",
         },
     )
@@ -445,9 +457,12 @@ class TestCache:
                     "mypackage.foo.modified": {serialized_mtime}
                 }}""",
                 ".grimp_cache/mypackage.data.json": """{
-                    "mypackage.foo.modified": [
-                        ["stale", 33, "We should not use this cached value."]
-                    ]
+                    "version": 2,
+                    "imports_by_module": {
+                        "mypackage.foo.modified": [
+                            ["stale", false, 33, "We should not use this cached value."]
+                        ]
+                    }
                 }""",
             },
         )
@@ -481,9 +496,12 @@ class TestCache:
                     "mypackage.foo.modified": {self.SOME_MTIME - 1}
                 }}""",
                 ".grimp_cache/mypackage.data.json": f"""{{
-                    "mypackage.foo.modified": [
-                        {serialized_import}
-                    ]
+                    "version": 2,
+                    "imports_by_module": {{
+                        "mypackage.foo.modified": [
+                            {serialized_import}
+                        ]
+                    }}
                 }}""",
             },
         )
@@ -661,14 +679,17 @@ class TestCache:
                 green_two.name: mtimes[green_two],
             },
             f"{expected_cache_dir}/{expected_data_file_name}": {
-                blue_one.name: {
-                    (blue_two.name, 11, "from . import two"),
-                    ("externalpackage", 22, "import externalpackage"),
-                },
-                blue_two.name: set(),
-                green_one.name: set(),
-                green_two.name: {
-                    (green_one.name, 33, "from . import one"),
+                "version": 2,
+                "imports_by_module": {
+                    blue_one.name: {
+                        (blue_two.name, False, 11, "from . import two"),
+                        ("externalpackage", False, 22, "import externalpackage"),
+                    },
+                    blue_two.name: set(),
+                    green_one.name: set(),
+                    green_two.name: {
+                        (green_one.name, False, 33, "from . import one"),
+                    },
                 },
             },
         }
@@ -709,6 +730,8 @@ def _unflake(flakey_data):
     for key, value in flakey_data.items():
         if isinstance(value, list):
             non_flakey_value = {tuple(i) for i in value}
+        elif isinstance(value, dict):
+            non_flakey_value = _unflake(value)
         else:
             non_flakey_value = value
         non_flakey_data[key] = non_flakey_value

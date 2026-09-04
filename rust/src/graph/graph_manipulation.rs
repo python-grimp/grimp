@@ -120,6 +120,7 @@ impl Graph {
         imported: ModuleToken,
         line_number: u32,
         line_contents: &str,
+        is_lazy: bool,
     ) {
         self.imports
             .entry(importer)
@@ -137,7 +138,7 @@ impl Graph {
             self.import_details
                 .entry((importer, imported))
                 .or_default()
-                .insert(PyImportDetails::new(line_number, line_contents));
+                .insert(PyImportDetails::new(line_number, line_contents, is_lazy));
         }
     }
 

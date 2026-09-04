@@ -75,17 +75,27 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ImportsByModule {
     }
 }
 
+/// The version of the data cache file format.
+///
+/// Bump this whenever the serialized structure changes. On read, a file with a
+/// different (or missing) version is treated as a version mismatch and rebuilt,
+/// rather than being mistaken for a corrupt file.
+const CACHE_SCHEMA_VERSION: u32 = 2;
+
 fn serialize_imports_by_module(
     imports_by_module: &HashMap<Module, HashSet<DirectImport>>,
 ) -> String {
-    let raw_map: HashMap<&str, Vec<(&str, usize, &str)>> = imports_by_module
+    // Fields are ordered to match the `get_import_details` dict (`imported`, `is_lazy`,
+    // `line_number`, `line_contents`); `importer` is the map key.
+    let raw_map: HashMap<&str, Vec<(&str, bool, usize, &str)>> = imports_by_module
         .iter()
         .map(|(module, imports)| {
-            let imports_vec: Vec<(&str, usize, &str)> = imports
+            let imports_vec: Vec<(&str, bool, usize, &str)> = imports
                 .iter()
                 .map(|import| {
                     (
                         import.imported.as_str(),
+                        import.is_lazy,
                         import.line_number,
                         import.line_contents.as_str(),
                     )
@@ -95,15 +105,32 @@ fn serialize_imports_by_module(
         })
         .collect();
 
-    serde_json::to_string(&raw_map).expect("Failed to serialize to JSON")
+    let envelope = serde_json::json!({
+        "version": CACHE_SCHEMA_VERSION,
+        "imports_by_module": raw_map,
+    });
+
+    serde_json::to_string(&envelope).expect("Failed to serialize to JSON")
 }
 
 pub fn parse_json_to_map(
     json_str: &str,
     filename: &str,
 ) -> GrimpResult<HashMap<Module, HashSet<DirectImport>>> {
-    let raw_map: HashMap<String, Vec<(String, usize, String)>> = serde_json::from_str(json_str)
+    // Parse into a generic value first, so we can distinguish genuinely corrupt
+    // JSON from a cache file written by a different format version (e.g. by an
+    // older Grimp). The latter should be silently rebuilt, not warned about.
+    let value: serde_json::Value = serde_json::from_str(json_str)
         .map_err(|_| GrimpError::CorruptCache(filename.to_string()))?;
+
+    let version = value.get("version").and_then(|v| v.as_u64());
+    if version != Some(CACHE_SCHEMA_VERSION as u64) {
+        return Err(GrimpError::CacheVersionMismatch(filename.to_string()));
+    }
+
+    let raw_map: HashMap<String, Vec<(String, bool, usize, String)>> =
+        serde_json::from_value(value.get("imports_by_module").cloned().unwrap_or_default())
+            .map_err(|_| GrimpError::CorruptCache(filename.to_string()))?;
 
     let mut parsed_map: HashMap<Module, HashSet<DirectImport>> = HashMap::new();
 
@@ -113,13 +140,15 @@ pub fn parse_json_to_map(
         };
         let import_set: HashSet<DirectImport> = imports
             .into_iter()
-            .map(|(imported, line_number, line_contents)| DirectImport {
-                importer: module_name.clone(),
-                imported,
-                line_number,
-                line_contents,
-                is_lazy: false,  // TODO get working with cache.
-            })
+            .map(
+                |(imported, is_lazy, line_number, line_contents)| DirectImport {
+                    importer: module_name.clone(),
+                    imported,
+                    line_number,
+                    line_contents,
+                    is_lazy,
+                },
+            )
             .collect();
         parsed_map.insert(module, import_set);
     }

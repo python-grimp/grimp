@@ -29,6 +29,7 @@ mod _rustgrimp {
 
     #[pymodule_export]
     use crate::exceptions::{
-        CorruptCache, InvalidModuleExpression, ModuleNotPresent, NoSuchContainer, ParseError,
+        CacheVersionMismatch, CorruptCache, InvalidModuleExpression, ModuleNotPresent,
+        NoSuchContainer, ParseError,
     };
 }

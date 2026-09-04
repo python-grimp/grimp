@@ -15,6 +15,7 @@ def test_build_graph_of_non_ascii_source():
         {
             "importer": "encodingpackage.importer",
             "imported": "encodingpackage.imported",
+            "is_lazy": False,
             "line_number": 1,
             "line_contents": "from .imported import π",
         },
@@ -35,6 +36,7 @@ def test_build_graph_of_non_utf8_source():
         {
             "importer": "encodingpackage.shift_jis_importer",
             "imported": "encodingpackage.imported",
+            "is_lazy": False,
             "line_number": 3,
             "line_contents": "from .imported import π",
         },

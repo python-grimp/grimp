@@ -27,6 +27,7 @@ ImportTuple = tuple[str, str]
 class DetailedImport(Import):
     line_number: int
     line_contents: str
+    is_lazy: bool
 
 
 class ImportGraph:
@@ -138,13 +139,15 @@ class ImportGraph:
         imported: str,
         line_number: int | None = None,
         line_contents: str | None = None,
+        is_lazy: bool | None = None,
     ) -> None:
         """
         Add a direct import between two modules to the graph. If the modules are not already
         present, they will be added to the graph.
 
         Raises:
-            ValueError if only one of line_number and line_contents is supplied.
+            ValueError if only one of line_number and line_contents is supplied, or if
+            is_lazy is supplied without line_number and line_contents.
         """
         self._cached_modules = None
         self._rustgraph.add_import(
@@ -152,6 +155,7 @@ class ImportGraph:
             imported=imported,
             line_number=line_number,
             line_contents=line_contents,
+            is_lazy=is_lazy,
         )
 
     def remove_import(self, *, importer: str, imported: str) -> None:
@@ -252,6 +256,7 @@ class ImportGraph:
                 'imported': 'mypackage.imported',
                 'line_number': 5,
                 'line_contents': 'from mypackage import imported',
+                'is_lazy': False,
             },
             (additional imports here)
         ]
