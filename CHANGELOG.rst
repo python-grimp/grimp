@@ -5,6 +5,7 @@ Changelog
 latest
 ------
 
+* Support explicit lazy imports.
 * Raise ``ValueError`` instead of panicking when ``Graph.add_import`` is called with only one of
   ``line_number`` and ``line_contents``.
 

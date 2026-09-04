@@ -36,6 +36,9 @@ pub enum GrimpError {
 
     #[error("Could not use corrupt cache file {0}.")]
     CorruptCache(String),
+
+    #[error("Cache file {0} was written by a different version of Grimp.")]
+    CacheVersionMismatch(String),
 }
 
 pub type GrimpResult<T> = Result<T, GrimpError>;
@@ -55,6 +58,9 @@ impl From<GrimpError> for PyErr {
                 line_number, text, ..
             } => PyErr::new::<exceptions::ParseError, _>((line_number, text)),
             GrimpError::CorruptCache(_) => exceptions::CorruptCache::new_err(value.to_string()),
+            GrimpError::CacheVersionMismatch(_) => {
+                exceptions::CacheVersionMismatch::new_err(value.to_string())
+            }
         }
     }
 }

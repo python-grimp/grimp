@@ -46,6 +46,7 @@ class TestBuildGraph:
             {
                 "importer": "rootpackageblue.two",
                 "imported": "rootpackageblue.one.alpha",
+                "is_lazy": False,
                 "line_number": 1,
                 "line_contents": "from .one.alpha import BAR",
             }
@@ -60,6 +61,7 @@ class TestBuildGraph:
             {
                 "importer": "rootpackagegreen.two",
                 "imported": "rootpackageblue.one.alpha",
+                "is_lazy": False,
                 "line_number": 1,
                 "line_contents": "from rootpackageblue.one import alpha",
             }

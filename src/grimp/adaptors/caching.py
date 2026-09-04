@@ -203,6 +203,12 @@ class Cache(AbstractCache):
         except rust.CorruptCache:
             logger.warning(f"Could not use corrupt cache file {data_cache_filename}.")
             return {}
+        except rust.CacheVersionMismatch:
+            logger.info(
+                f"Cache file {data_cache_filename} was written by a different version of Grimp; "
+                "rebuilding."
+            )
+            return {}
 
         logger.info(f"Used cache data file {data_cache_filename}.")
         return imports_by_module

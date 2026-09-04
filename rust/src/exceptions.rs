@@ -6,6 +6,7 @@ create_exception!(_rustgrimp, ModuleNotPresent, PyException);
 create_exception!(_rustgrimp, NoSuchContainer, PyException);
 create_exception!(_rustgrimp, InvalidModuleExpression, PyException);
 create_exception!(_rustgrimp, CorruptCache, PyException);
+create_exception!(_rustgrimp, CacheVersionMismatch, PyException);
 
 // We need to use here `pyclass(extends=PyException)` instead of `create_exception!`
 // since the exception contains custom data. See:

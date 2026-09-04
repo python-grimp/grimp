@@ -21,6 +21,7 @@ class TestCopy:
             {
                 "importer": "foo",
                 "imported": "bar",
+                "is_lazy": False,
                 "line_number": 3,
                 "line_contents": "import bar",
             }

@@ -162,6 +162,7 @@ def test_get_import_details():
         {
             "importer": "testpackage.utils",
             "imported": "testpackage.two.alpha",
+            "is_lazy": False,
             "line_number": 5,
             "line_contents": "from .two import alpha",
         }

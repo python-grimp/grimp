@@ -18,3 +18,13 @@ def test_build_graph_with_lazy_imports():
         "lazyimports.two.blue",
         "lazyimports.two.green",
     } == result
+    # Spot check that one is stored as is_lazy.
+    assert [
+        {
+            "importer": "lazyimports.one",
+            "imported": "lazyimports.two",
+            "is_lazy": True,
+            "line_number": 2,
+            "line_contents": "lazy from lazyimports import two",
+        }
+    ] == graph.get_import_details(importer="lazyimports.one", imported="lazyimports.two")

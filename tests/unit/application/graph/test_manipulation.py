@@ -1,6 +1,8 @@
 import re
+from typing import TypedDict
 
 import pytest
+from typing_extensions import NotRequired  # Can move to typing once drop support for 3.10.
 
 from grimp.application.graph import ImportGraph
 from grimp.exceptions import ModuleNotPresent
@@ -48,6 +50,7 @@ class TestRemoveModule:
             {
                 "importer": a,
                 "imported": c,
+                "is_lazy": False,
                 "line_contents": "import mypackage.yellow",
                 "line_number": 2,
             }
@@ -87,6 +90,7 @@ class TestRemoveModule:
             {
                 "importer": a,
                 "imported": c,
+                "is_lazy": False,
                 "line_contents": "import mypackage.yellow",
                 "line_number": 2,
             }
@@ -190,6 +194,84 @@ def test_add_import_with_only_one_of_line_number_and_line_contents_raises(kwargs
     assert graph.modules == set()
 
 
+@pytest.mark.parametrize("is_lazy", (True, False))
+@pytest.mark.parametrize(
+    "line_number, line_contents",
+    (
+        (None, None),
+        (1, None),
+        (None, "-"),
+    ),
+)
+def test_add_import_with_is_lazy_but_no_line_details_raises(
+    is_lazy: bool, line_number: bool, line_contents: bool
+):
+    graph = ImportGraph()
+
+    class Args(TypedDict):
+        line_number: NotRequired[int]
+        line_contents: NotRequired[str]
+
+    kwargs: Args = {}
+    if line_number:
+        kwargs["line_number"] = 1
+    if line_contents:
+        kwargs["line_contents"] = "-"
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape("You must provide line_number and line_contents when providing is_lazy."),
+    ):
+        graph.add_import(importer="foo", imported="bar", is_lazy=is_lazy, **kwargs)
+
+    # The graph should be left untouched.
+    assert graph.modules == set()
+
+
+@pytest.mark.parametrize("is_lazy", (True, False))
+def test_add_import_with_is_lazy_and_line_details(is_lazy):
+    graph = ImportGraph()
+
+    graph.add_import(
+        importer="foo",
+        imported="bar",
+        is_lazy=is_lazy,
+        line_number=1,
+        line_contents="import bar",
+    )
+
+    assert graph.get_import_details(importer="foo", imported="bar") == [
+        {
+            "importer": "foo",
+            "imported": "bar",
+            "is_lazy": is_lazy,
+            "line_number": 1,
+            "line_contents": "import bar",
+        }
+    ]
+
+
+def test_add_import_with_line_details_defaults_is_lazy_to_false():
+    graph = ImportGraph()
+
+    graph.add_import(
+        importer="foo",
+        imported="bar",
+        line_number=1,
+        line_contents="import bar",
+    )
+
+    assert graph.get_import_details(importer="foo", imported="bar") == [
+        {
+            "importer": "foo",
+            "imported": "bar",
+            "is_lazy": False,
+            "line_number": 1,
+            "line_contents": "import bar",
+        }
+    ]
+
+
 class TestRemoveImport:
     def test_removes_from_modules(self):
         graph = ImportGraph()
@@ -226,6 +308,7 @@ class TestRemoveImport:
             {
                 "importer": a,
                 "imported": c,
+                "is_lazy": False,
                 "line_contents": "import mypackage.yellow",
                 "line_number": 2,
             }
@@ -345,6 +428,7 @@ class TestSquashModule:
         import_details = dict(
             importer="foo",
             imported="bar.blue",
+            is_lazy=False,
             line_number=1,
             line_contents="from . import bar",
         )
@@ -365,6 +449,7 @@ class TestSquashModule:
         import_details = dict(
             importer="bar.blue",
             imported="foo",
+            is_lazy=False,
             line_number=1,
             line_contents="from . import foo",
         )
