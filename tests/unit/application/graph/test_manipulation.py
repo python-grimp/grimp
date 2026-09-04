@@ -171,6 +171,23 @@ def test_add_import(add_module):
     assert set() == graph.find_modules_directly_imported_by(b)
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    (
+        {"line_number": 1},
+        {"line_contents": "import bar"},
+    ),
+)
+def test_add_import_with_only_one_of_line_number_and_line_contents_raises(kwargs):
+    graph = ImportGraph()
+
+    # PanicException is a BaseException but not an Exception, so catch BaseException.
+    with pytest.raises(
+        BaseException, match=re.escape("Expected line_number and line_contents, or neither.")
+    ):
+        graph.add_import(importer="foo", imported="bar", **kwargs)
+
+
 class TestRemoveImport:
     def test_removes_from_modules(self):
         graph = ImportGraph()
