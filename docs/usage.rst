@@ -571,6 +571,8 @@ Methods for manipulating the graph
     :param str line_contents: The line that contains the import statement.
     :return: None
 
+    :raises: ``ValueError`` if only one of ``line_number`` or ``line_contents`` is supplied.
+
 .. py:function:: ImportGraph.remove_import(importer, imported)
 
     Remove a direct import between two modules. Does not remove the modules themselves.

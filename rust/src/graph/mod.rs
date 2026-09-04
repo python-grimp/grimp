@@ -271,22 +271,26 @@ impl GraphWrapper {
         imported: &str,
         line_number: Option<u32>,
         line_contents: Option<&str>,
-    ) {
-        let importer = self._graph.get_or_add_module(importer).token();
-        let imported = self._graph.get_or_add_module(imported).token();
+    ) -> PyResult<()> {
         match (line_number, line_contents) {
             (Some(line_number), Some(line_contents)) => {
+                let importer = self._graph.get_or_add_module(importer).token();
+                let imported = self._graph.get_or_add_module(imported).token();
                 self._graph
-                    .add_detailed_import(importer, imported, line_number, line_contents)
+                    .add_detailed_import(importer, imported, line_number, line_contents);
             }
             (None, None) => {
+                let importer = self._graph.get_or_add_module(importer).token();
+                let imported = self._graph.get_or_add_module(imported).token();
                 self._graph.add_import(importer, imported);
             }
             _ => {
-                // TODO handle better.
-                panic!("Expected line_number and line_contents, or neither.");
+                return Err(PyValueError::new_err(
+                    "Expected line_number and line_contents, or neither.",
+                ));
             }
         }
+        Ok(())
     }
 
     #[pyo3(signature = (*, importer, imported))]
