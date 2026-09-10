@@ -170,16 +170,35 @@ jobs:
             3.12
             3.13
             3.14
-            3.14t
             3.15
-            3.15t
           allow-prereleases: true
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
-          args: --release --out dist --find-interpreter
+          args: --release --out dist --interpreter 3.10 3.11 3.12 3.13 3.14 3.15
           sccache: 'true'
+
+      # setup-python installs the free-threaded interpreter's binary under the
+      # same name as the regular one (e.g. `python3.14`), so co-installing
+      # both and using --find-interpreter silently drops the regular wheel
+      # (whichever interpreter is installed second shadows the other on
+      # PATH). Building free-threaded wheels in a separate step avoids this.
+      # See https://github.com/pyo3/maturin-action#windows-build-the-regular-and-free-threaded-interpreters-in-separate-jobs
+      # and https://github.com/python-grimp/grimp/issues/317.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: |
+            3.14t
+            3.15t
+          allow-prereleases: true
+      - name: Build free-threaded wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+          args: --release --out dist --interpreter 3.14t 3.15t
+          sccache: 'true'
+
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
