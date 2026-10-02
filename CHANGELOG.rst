@@ -5,6 +5,8 @@ Changelog
 latest
 ------
 
+* Document Windows Application Control limitations and protection-preserving
+  alternatives (https://github.com/python-grimp/grimp/issues/319).
 * Fix missing macOS wheels for regular (non-freethreaded) Python 3.14+
   (https://github.com/python-grimp/grimp/issues/317).
 
