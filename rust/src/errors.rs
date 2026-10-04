@@ -1,6 +1,6 @@
 use crate::exceptions;
 use pyo3::PyErr;
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyFileNotFoundError, PyUnicodeError, PyValueError};
 use ruff_python_parser::ParseError as RuffParseError;
 use thiserror::Error;
 
@@ -39,6 +39,12 @@ pub enum GrimpError {
 
     #[error("Cache file {0} was written by a different version of Grimp.")]
     CacheVersionMismatch(String),
+
+    #[error("{0}")]
+    FileNotFound(String),
+
+    #[error("{0}")]
+    UndecodableFile(String),
 }
 
 pub type GrimpResult<T> = Result<T, GrimpError>;
@@ -61,6 +67,9 @@ impl From<GrimpError> for PyErr {
             GrimpError::CacheVersionMismatch(_) => {
                 exceptions::CacheVersionMismatch::new_err(value.to_string())
             }
+            GrimpError::FileNotFound(_) => PyFileNotFoundError::new_err(value.to_string()),
+            // Not UnicodeDecodeError, as that can't be created from just a message.
+            GrimpError::UndecodableFile(_) => PyUnicodeError::new_err(value.to_string()),
         }
     }
 }
