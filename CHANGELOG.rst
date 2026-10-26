@@ -2,7 +2,7 @@
 Changelog
 =========
 
-3.18 (2026-10-23)
+3.18 (2026-10-26)
 -----------------
 
 * Fix missing macOS wheels for regular (non-freethreaded) Python 3.14+
