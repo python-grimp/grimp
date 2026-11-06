@@ -1,6 +1,6 @@
-use crate::errors::GrimpResult;
+use crate::errors::{GrimpError, GrimpResult};
 
-use crate::graph::{Graph, ModuleToken};
+use crate::graph::{Graph, ModuleIterator, ModuleToken};
 use rustc_hash::{FxHashMap, FxHashSet};
 use slotmap::SecondaryMap;
 use std::cmp::Ordering;
@@ -9,17 +9,45 @@ impl Graph {
     pub fn nominate_cycle_breakers(
         &self,
         package: ModuleToken,
+        additional_packages: &[ModuleToken],
     ) -> GrimpResult<FxHashSet<(ModuleToken, ModuleToken)>> {
-        // Get children of this package.
-        let children = match self.module_children.get(package) {
-            Some(children) => children,
-            None => return Ok(FxHashSet::default()),
-        };
-        if children.len() < 2 {
+        if additional_packages.is_empty() {
+            // A single package was passed: the nodes of the graph are its children.
+            // Children of a single package can never overlap, so no need to check.
+            let children = match self.module_children.get(package) {
+                Some(children) => children.clone(),
+                None => return Ok(FxHashSet::default()),
+            };
+            self.nominate_cycle_breakers_for_nodes(&children)
+        } else {
+            // Multiple packages were passed: the packages themselves are the nodes.
+            let mut nodes: FxHashSet<ModuleToken> = FxHashSet::default();
+            nodes.insert(package);
+            nodes.extend(additional_packages.iter().copied());
+
+            // The packages must not overlap: if one is a descendant of another, the edges
+            // between them (as packages) would be ill-defined.
+            for node in &nodes {
+                for descendant in self.get_module_descendants(*node).tokens() {
+                    if nodes.contains(&descendant) {
+                        return Err(GrimpError::SharedDescendants);
+                    }
+                }
+            }
+
+            self.nominate_cycle_breakers_for_nodes(&nodes)
+        }
+    }
+
+    fn nominate_cycle_breakers_for_nodes(
+        &self,
+        nodes: &FxHashSet<ModuleToken>,
+    ) -> GrimpResult<FxHashSet<(ModuleToken, ModuleToken)>> {
+        if nodes.len() < 2 {
             return Ok(FxHashSet::default());
         }
         let (orig_imports, orig_reverse_imports, edge_weights) =
-            self.build_graph_maps_of_children(children);
+            self.build_graph_maps_of_nodes(nodes);
 
         // Make a copy of the graph. We'll iteratively remove nodes from this.
         let mut working_imports = orig_imports.clone();
@@ -166,9 +194,9 @@ impl Graph {
     // with empty sets if they have no imports to / from.
     // They are denormalized into two maps for fast lookups.
     #[allow(clippy::type_complexity)]
-    fn build_graph_maps_of_children(
+    fn build_graph_maps_of_nodes(
         &self,
-        children: &FxHashSet<ModuleToken>,
+        nodes: &FxHashSet<ModuleToken>,
     ) -> (
         SecondaryMap<ModuleToken, FxHashSet<ModuleToken>>, // Imports
         SecondaryMap<ModuleToken, FxHashSet<ModuleToken>>, // Reverse imports
@@ -180,25 +208,25 @@ impl Graph {
             SecondaryMap::default();
         let mut weights = FxHashMap::default();
 
-        for child in children {
-            orig_imports.insert(*child, FxHashSet::default());
-            orig_reverse_imports.insert(*child, FxHashSet::default());
+        for node in nodes {
+            orig_imports.insert(*node, FxHashSet::default());
+            orig_reverse_imports.insert(*node, FxHashSet::default());
         }
-        // Get number of imports between each child.
+        // Get number of imports between each node.
         // Add as edges.
-        for child_a in children {
-            for child_b in children.iter().filter(|child| *child != child_a) {
-                // Get number of imports from child_a to child_b (as package).
+        for node_a in nodes {
+            for node_b in nodes.iter().filter(|node| *node != node_a) {
+                // Get number of imports from node_a to node_b (as package).
                 let num_imports_from_a_to_b = self
-                    .find_direct_imports_between(*child_a, *child_b, true)
+                    .find_direct_imports_between(*node_a, *node_b, true)
                     .unwrap()
                     .len();
 
                 if num_imports_from_a_to_b > 0 {
                     // a depends on b - add it as an edge in our temporary graph.
-                    orig_imports[*child_a].insert(*child_b);
-                    orig_reverse_imports[*child_b].insert(*child_a);
-                    weights.insert((*child_a, *child_b), num_imports_from_a_to_b);
+                    orig_imports[*node_a].insert(*node_b);
+                    orig_reverse_imports[*node_b].insert(*node_a);
+                    weights.insert((*node_a, *node_b), num_imports_from_a_to_b);
                 }
             }
         }

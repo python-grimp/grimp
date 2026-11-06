@@ -476,14 +476,18 @@ class ImportGraph:
 
         return _dependencies_from_tuple(result)
 
-    def nominate_cycle_breakers(self, package: str) -> set[ImportTuple]:
+    def nominate_cycle_breakers(self, package: str, *additional_packages: str) -> set[ImportTuple]:
         """
-        Identify a set of imports that, if removed, would make the package locally acyclic.
+        Identify a set of imports that, if removed, would make the supplied packages acyclic.
+
+        For more information see the docs in usage.rst.
         """
-        if not self._rustgraph.contains_module(package):
-            msg = f'"{package}" not present in the graph.'
-            raise ModuleNotPresent(msg)
-        return self._rustgraph.nominate_cycle_breakers(package)
+        for package_ in (package, *additional_packages):
+            if not self._rustgraph.contains_module(package_):
+                msg = f'"{package_}" not present in the graph.'
+                raise ModuleNotPresent(msg)
+
+        return self._rustgraph.nominate_cycle_breakers(package, additional_packages)
 
     # Dunder methods
     # --------------
