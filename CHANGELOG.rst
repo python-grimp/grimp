@@ -2,8 +2,8 @@
 Changelog
 =========
 
-latest
-------
+3.19 (2026-11-06)
+-----------------
 
 * Support multiple packages in ``ImportGraph.nominate_cycle_breakers``.
 * Drop support for Python 3.10.
