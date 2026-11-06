@@ -60,6 +60,7 @@ dev = [
     "requests==2.32.3",
     "sqlalchemy==2.0.35",
     "google-cloud-audit-log==0.3.0",
+    "pyupgrade>=3.21.2",
 ]
 docs = [
     "sphinx>=7.4.7",

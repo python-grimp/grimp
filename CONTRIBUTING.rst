@@ -188,8 +188,9 @@ Dropping support for a Python version
 4. In ``justfile``, remove the ``just test-python 3.x`` (and ``3.xt``) line(s) from the
    ``test-all`` recipe.
 5. In ``CHANGELOG.rst``, add an entry under ``latest``: ``* Drop support for Python 3.x.``
-6. Remove any code paths or tests that exist solely to support the dropped version.
-7. Run ``just full-check`` to confirm everything passes.
+6. Run ``just modernize-python 3x`` with the new lowest version (e.g. ``just modernize-python 311``).
+7. Remove any code paths or tests that exist solely to support the dropped version.
+8. Run ``just full-check`` to confirm everything passes.
 
 Benchmarking
 ============

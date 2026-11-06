@@ -118,6 +118,13 @@ lint:
     @echo ''
     @echo '👍 {{GREEN}} Linting all good.{{NORMAL}}'
 
+# Modernize Python code. (E.g. just modernize-python 311)
+[group('linting')]
+modernize-python MIN_VERSION:
+    @find {docs,src,tests} -name "*.py" -not -path "tests/assets/*" -exec uv run pyupgrade --py{{MIN_VERSION}}-plus --exit-zero-even-if-changed {} +
+    @just autofix-python
+    @just format-python
+
 # Build docs.
 [group('docs')]
 build-docs:
