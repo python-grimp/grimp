@@ -1,8 +1,7 @@
 import re
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 import pytest
-from typing_extensions import NotRequired  # Can move to typing once drop support for 3.10.
 
 from grimp.application.graph import ImportGraph
 from grimp.exceptions import ModuleNotPresent

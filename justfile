@@ -33,7 +33,6 @@ test-python $UV_PYTHON=env("UV_PYTHON", ""):
 # Runs tests under all supported Python versions, plus Rust.
 [group('testing')]
 test-all:
-    just test-python 3.10
     just test-python 3.11
     just test-python 3.12
     just test-python 3.13
