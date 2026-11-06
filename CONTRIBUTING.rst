@@ -131,9 +131,13 @@ Adding support for a new Python version
    classifiers.
 2. In ``.github/workflows/main.yml``, add ``"3.x"`` and ``"3.xt"`` to the
    ``test`` job's ``python-version`` matrix.
-3. In ``.github/workflows/release.yml``, add ``"3.x"`` and ``"3.xt"`` to every interpreter
-   list in the file (``linux``, ``musllinux`` and ``windows`` jobs' YAML anchors, plus the
-   ``macos`` job's literal interpreter lists in two places).
+3. In ``.github/workflows/release.yml``, add ``"3.x"`` and ``"3.xt"`` to the shared
+   ``linux`` and ``musllinux`` interpreter lists. For ``windows``, add ``"3.x"`` to
+   the regular interpreter lists (including the ARM64 literal list) and ``"3.xt"``
+   to the free-threaded interpreter lists. For ``macos``, add ``3.x`` to the regular
+   ``actions/setup-python`` list and matching ``--interpreter`` arguments, and ``3.xt``
+   to the corresponding free-threaded step's list and arguments. Keep the regular and
+   free-threaded installations separate on Windows/macOS to avoid binary shadowing.
 4. Push a branch with this change and trigger the release workflow manually, without pushing
    a tag, to see which targets can actually build the new version::
 
