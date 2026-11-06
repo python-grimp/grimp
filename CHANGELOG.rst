@@ -2,6 +2,11 @@
 Changelog
 =========
 
+latest
+------
+
+* Support multiple packages in ``ImportGraph.nominate_cycle_breakers``.
+
 3.18 (2026-10-26)
 -----------------
 

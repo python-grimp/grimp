@@ -198,6 +198,33 @@ impl GraphWrapper {
 
         PyTuple::new(py, python_dependencies)
     }
+
+    fn convert_cycle_breakers_to_python<'py>(
+        &self,
+        py: Python<'py>,
+        cycle_breakers: FxHashSet<(ModuleToken, ModuleToken)>,
+    ) -> PyResult<Bound<'py, PySet>> {
+        PySet::new(
+            py,
+            cycle_breakers
+                .into_iter()
+                .map(|(importer, imported)| {
+                    let importer = self._graph.get_module(importer).unwrap();
+                    let imported = self._graph.get_module(imported).unwrap();
+                    Import::new(importer.name(), imported.name())
+                })
+                .map(|import| {
+                    PyTuple::new(
+                        py,
+                        [
+                            import.importer.into_py_any(py).unwrap(),
+                            import.imported.into_py_any(py).unwrap(),
+                        ],
+                    )
+                    .unwrap()
+                }),
+        )
+    }
 }
 
 /// Wrapper around the Graph struct that integrates with Python.
@@ -642,29 +669,17 @@ impl GraphWrapper {
         &self,
         py: Python<'py>,
         package: &str,
+        additional_packages: Vec<String>,
     ) -> PyResult<Bound<'py, PySet>> {
         let package = self.get_visible_module_by_name(package)?.token();
-        let cycle_breakers = self._graph.nominate_cycle_breakers(package)?;
-        PySet::new(
-            py,
-            cycle_breakers
-                .into_iter()
-                .map(|(importer, imported)| {
-                    let importer = self._graph.get_module(importer).unwrap();
-                    let imported = self._graph.get_module(imported).unwrap();
-                    Import::new(importer.name(), imported.name())
-                })
-                .map(|import| {
-                    PyTuple::new(
-                        py,
-                        [
-                            import.importer.into_py_any(py).unwrap(),
-                            import.imported.into_py_any(py).unwrap(),
-                        ],
-                    )
-                    .unwrap()
-                }),
-        )
+        let additional_packages = additional_packages
+            .iter()
+            .map(|package| Ok(self.get_visible_module_by_name(package)?.token()))
+            .collect::<PyResult<Vec<_>>>()?;
+        let cycle_breakers = self
+            ._graph
+            .nominate_cycle_breakers(package, &additional_packages)?;
+        self.convert_cycle_breakers_to_python(py, cycle_breakers)
     }
 
     #[pyo3(name = "clone")]

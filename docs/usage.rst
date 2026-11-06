@@ -509,21 +509,30 @@ Higher level analysis
 
         ``frozenset[str]``:  Imported modules at the end of the chain.
 
-.. py:function:: ImportGraph.nominate_cycle_breakers(package)
+.. py:function:: ImportGraph.nominate_cycle_breakers(package, *additional_packages)
 
-    Choose an approximately minimal set of dependencies that, if removed, would make the package locally acyclic.
+    Choose an approximately minimal set of dependencies that, if removed, would make the supplied packages acyclic.
 
-    - 'Acyclic' means that there are no direct dependency cycles between the package's children. Indirect
-      dependencies (i.e. ones involving modules outside the supplied package) are disregarded,
-      as are imports between the package and its children.
-    - 'Dependency cycles' mean cycles between the *squashed* children (see `Terminology`_ above).
+    The packages that are checked for cycles ('checked packages') change based on whether ``additional_packages`` are passed:
 
-    Multiple sets of cycle breakers can exist for a given package. To arrive at this particular set, the following
-    approach is used:
+    - No ``additional_packages``: the checked packages are the *children* of ``package``.
+    - If ``additional_packages``: the checked packages are the packages themselves (including ``package``).
 
-    1. Create a graph whose nodes are each child of the package.
-    2. For each pair of children, add directed edges corresponding to whether there are imports between those two
-       children (as packages, rather than individual modules). The edges are weighted according to the number of
+    In both cases:
+
+    - 'Acyclic' means that there are no direct dependency cycles between the checked packages. Indirect
+      dependencies (i.e. ones involving modules outside the checked packages) are disregarded, as are imports
+      between a checked package and its descendants.
+    - 'Dependency cycles' means cycles between the *squashed* checked packages (see `Terminology`_ above).
+
+    If ``additional_packages`` are passed, the checked packages must not overlap: if any checked package is a
+    descendant of another, a ``ValueError`` is raised.
+
+    Multiple sets of cycle breakers can exist. To arrive at this particular set, the following approach is used:
+
+    1. Create a graph whose nodes are the checked packages.
+    2. For each pair of checked packages, add directed edges corresponding to whether there are imports between those
+       two packages (as packages, rather than individual modules). The edges are weighted according to the number of
        *dependencies* they represent: this is usually the same as the number of imports, but if a module imports
        another module in multiple places, it will be treated as a single dependency.
     3. Calculate the approximate
@@ -536,12 +545,14 @@ Higher level analysis
        to these three imports: ``mypackage.foo.blue -> mypackage.bar.green``,
        ``mypackage.foo.blue.one -> mypackage.bar.green.two``, and ``mypackage.foo.blue -> mypackage.bar.green.three``.
 
-    :param str package: The package in the graph to check for cycles. If a module with no children is passed,
-      an empty set is returned.
-    :return: A set of imports that, if removed, would make the imports between the the children of the supplied
-      package acyclic.
+    :param str package: A package in the graph. If passed on its own, the checked packages are its children, and if it
+      has no children an empty set is returned.
+    :param str additional_packages: Any further packages. If supplied, the checked packages are ``package`` and these
+      additional packages themselves, rather than their children.
+    :return: A set of imports that, if removed, would make the checked packages acyclic.
     :rtype: ``set[tuple[str, str]]``. In each import tuple, the first element is the importer module and the second
       is the imported.
+    :raises ValueError: If ``additional_packages`` are passed and the checked packages overlap (one is a descendant of another).
 
 Methods for manipulating the graph
 ----------------------------------
