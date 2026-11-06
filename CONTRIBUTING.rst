@@ -124,6 +124,73 @@ It's a good idea to run ``just full-check`` before getting a review.
 This will run linters, docs build and tests under every supported Python version.
 You can automatically fix many lint errors using ``just autofix`` (or ``just autofix-python`` and ``just autofix-rust`` separately).
 
+Adding support for a new Python version
+========================================
+
+1. In ``pyproject.toml``, add ``3.x`` to the ``Programming Language :: Python :: 3.x``
+   classifiers.
+2. In ``.github/workflows/main.yml``, add ``"3.x"`` and ``"3.xt"`` to the
+   ``test`` job's ``python-version`` matrix.
+3. In ``.github/workflows/release.yml``, add ``"3.x"`` and ``"3.xt"`` to every interpreter
+   list in the file (``linux``, ``musllinux`` and ``windows`` jobs' YAML anchors, plus the
+   ``macos`` job's literal interpreter lists in two places).
+4. Push a branch with this change and trigger the release workflow manually, without pushing
+   a tag, to see which targets can actually build the new version::
+
+       gh workflow run release.yml --ref <your-branch>
+
+   Then watch it with ``gh run watch`` or in the Actions tab.
+5. For any ``linux``/``musllinux`` job that fails because the build image doesn't have the
+   new interpreter yet, split that target out of the shared interpreter list it was using
+   (e.g. ``&full-interpreters``/``&cross-interpreters``) into its own list without the new
+   version, following the pattern already used for targets that lag behind (see the comments
+   above the ``linux`` and ``musllinux`` matrices for the current state). To check directly
+   instead of waiting for a failed build, look up the image's available tags:
+
+   - ``linux`` job, native targets (x86_64, x86, aarch64): `quay.io/pypa manylinux2014 tags
+     <https://quay.io/repository/pypa/manylinux2014_x86_64?tab=tags>`_
+   - ``linux`` job, cross targets (armv7, s390x, ppc64le): `rust-cross manylinux2014-cross
+     tags <https://github.com/rust-cross/manylinux-cross/pkgs/container/manylinux2014-cross>`_
+   - ``musllinux`` job (all targets): `rust-cross rust-musl-cross tags
+     <https://github.com/rust-cross/rust-musl-cross/pkgs/container/rust-musl-cross>`_
+   - ``windows``/``macos`` jobs use ``actions/setup-python``, which installs from
+     `actions/python-versions <https://github.com/actions/python-versions/blob/main/versions-manifest.json>`_
+     - these are normally available from Python's own release day, including prereleases
+     (``allow-prereleases: true`` is already set).
+6. For each target excluded in step 5, `open a GitHub issue
+   <https://github.com/python-grimp/grimp/issues/new>`_ to track adding it once the build
+   image catches up (e.g. "Add Python 3.x wheels for musllinux", one issue per image/family
+   is fine if several targets share it). Add a comment directly above the relevant
+   interpreter list in ``release.yml`` referencing the issue number, e.g.::
+
+       # ghcr.io/rust-cross/rust-musl-cross doesn't yet bundle Python 3.x.
+       # See https://github.com/python-grimp/grimp/issues/<n>.
+
+   This is the only thing that makes the gap actionable later - without an issue number
+   there's nothing to revisit the exclusion when the image is updated.
+7. In ``justfile``, add a ``just test-python 3.x`` and ``3.xt`` lines to the ``test-all``
+   recipe.
+8. In ``CHANGELOG.rst``, add an entry under ``latest``: ``* Officially support Python 3.x.``
+   If step 5 excluded any targets, add a second entry noting which ones, why, and linking the
+   issue(s) from step 6 (see existing ``CHANGELOG.rst`` entries about missing 3.15 wheels for
+   the expected wording).
+9. Run ``just full-check`` to confirm everything passes.
+
+Dropping support for a Python version
+======================================
+
+1. In ``pyproject.toml``, update ``requires-python`` and remove the ``Programming Language ::
+   Python :: 3.x`` classifier.
+2. In ``.github/workflows/main.yml``, remove ``"3.x"`` (and ``"3.xt"`` if present) from the
+   ``test`` job's ``python-version`` matrix.
+3. In ``.github/workflows/release.yml``, remove ``"3.x"`` (and ``"3.xt"``) from every
+   interpreter list it appears in.
+4. In ``justfile``, remove the ``just test-python 3.x`` (and ``3.xt``) line(s) from the
+   ``test-all`` recipe.
+5. In ``CHANGELOG.rst``, add an entry under ``latest``: ``* Drop support for Python 3.x.``
+6. Remove any code paths or tests that exist solely to support the dropped version.
+7. Run ``just full-check`` to confirm everything passes.
+
 Benchmarking
 ============
 
