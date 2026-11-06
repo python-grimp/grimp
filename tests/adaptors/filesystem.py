@@ -91,7 +91,7 @@ class FakeFileSystem(AbstractFileSystem):
 
     def _walk_contents(
         self, directory_contents: dict[str, Any], containing_directory: str
-    ) -> Generator[tuple[str, list[str], list[str]], None, None]:
+    ) -> Generator[tuple[str, list[str], list[str]]]:
         directories = []
         files = []
         for key, value in directory_contents.items():
