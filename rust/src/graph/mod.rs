@@ -394,11 +394,16 @@ impl GraphWrapper {
             .direct_import_exists(importer, imported, as_packages)?)
     }
 
-    pub fn find_modules_directly_imported_by(&self, module: &str) -> PyResult<HashSet<String>> {
+    #[pyo3(signature = (module, as_package=false))]
+    pub fn find_modules_directly_imported_by(
+        &self,
+        module: &str,
+        as_package: bool,
+    ) -> PyResult<HashSet<String>> {
         let module = self.get_visible_module_by_name(module)?.token();
         Ok(self
             ._graph
-            .modules_directly_imported_by(module)
+            .modules_directly_imported_by(module, as_package)
             .iter()
             .into_module_iterator(&self._graph)
             .visible()
@@ -406,11 +411,16 @@ impl GraphWrapper {
             .collect())
     }
 
-    pub fn find_modules_that_directly_import(&self, module: &str) -> PyResult<HashSet<String>> {
+    #[pyo3(signature = (module, as_package=false))]
+    pub fn find_modules_that_directly_import(
+        &self,
+        module: &str,
+        as_package: bool,
+    ) -> PyResult<HashSet<String>> {
         let module = self.get_visible_module_by_name(module)?.token();
         Ok(self
             ._graph
-            .modules_that_directly_import(module)
+            .modules_that_directly_import(module, as_package)
             .iter()
             .into_module_iterator(&self._graph)
             .visible()
