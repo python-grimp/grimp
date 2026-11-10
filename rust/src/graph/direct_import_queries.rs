@@ -1,6 +1,6 @@
 use crate::errors::{GrimpError, GrimpResult};
 use crate::graph::{
-    EMPTY_IMPORT_DETAILS, EMPTY_MODULE_TOKENS, ExtendWithDescendants, Graph, MODULE_NAMES,
+    EMPTY_IMPORT_DETAILS, EMPTY_MODULE_TOKENS, ExtendWithDescendants, Graph, ModuleIterator,
     ModuleToken, PyImportDetails,
 };
 use crate::module_expressions::ModuleExpression;
@@ -67,14 +67,58 @@ impl Graph {
         Ok(all_imports)
     }
 
-    pub fn modules_directly_imported_by(&self, importer: ModuleToken) -> &FxHashSet<ModuleToken> {
-        self.imports.get(importer).unwrap_or(&EMPTY_MODULE_TOKENS)
+    /// Find the modules directly imported by the module.
+    ///
+    /// If `as_package` is true, the module is treated as a package: the result is the modules
+    /// directly imported by it or any of its descendants, excluding modules within the package.
+    pub fn modules_directly_imported_by(
+        &self,
+        importer: ModuleToken,
+        as_package: bool,
+    ) -> FxHashSet<ModuleToken> {
+        let mut importers: FxHashSet<_> = importer.into();
+        if as_package {
+            importers.extend_with_descendants(self);
+        }
+
+        let mut imported_modules: FxHashSet<_> = importers
+            .iter()
+            .flat_map(|importer| self.imports.get(*importer).unwrap_or(&EMPTY_MODULE_TOKENS))
+            .cloned()
+            .collect();
+        if as_package {
+            imported_modules.retain(|imported| !importers.contains(imported));
+        }
+        imported_modules
     }
 
-    pub fn modules_that_directly_import(&self, imported: ModuleToken) -> &FxHashSet<ModuleToken> {
-        self.reverse_imports
-            .get(imported)
-            .unwrap_or(&EMPTY_MODULE_TOKENS)
+    /// Find the modules that directly import the module.
+    ///
+    /// If `as_package` is true, the module is treated as a package: the result is the modules
+    /// that directly import it or any of its descendants, excluding modules within the package.
+    pub fn modules_that_directly_import(
+        &self,
+        imported: ModuleToken,
+        as_package: bool,
+    ) -> FxHashSet<ModuleToken> {
+        let mut importeds: FxHashSet<_> = imported.into();
+        if as_package {
+            importeds.extend_with_descendants(self);
+        }
+
+        let mut importers: FxHashSet<_> = importeds
+            .iter()
+            .flat_map(|imported| {
+                self.reverse_imports
+                    .get(*imported)
+                    .unwrap_or(&EMPTY_MODULE_TOKENS)
+            })
+            .cloned()
+            .collect();
+        if as_package {
+            importers.retain(|importer| !importeds.contains(importer));
+        }
+        importers
     }
 
     pub fn get_import_details(
@@ -93,22 +137,22 @@ impl Graph {
         importer_expression: &ModuleExpression,
         imported_expression: &ModuleExpression,
     ) -> FxHashSet<(ModuleToken, ModuleToken)> {
-        let interner = MODULE_NAMES.read().unwrap();
-        self.imports
+        let importers: FxHashSet<ModuleToken> = self
+            .find_matching_modules(importer_expression)
+            .tokens()
+            .collect();
+        let importeds: FxHashSet<ModuleToken> = self
+            .find_matching_modules(imported_expression)
+            .tokens()
+            .collect();
+
+        importers
             .iter()
-            .flat_map(|(importer, imports)| {
-                imports
+            .flat_map(|importer| {
+                self.modules_directly_imported_by(*importer)
                     .iter()
-                    .cloned()
-                    .map(move |imported| (importer, imported))
-            })
-            .filter(|(importer, imported)| {
-                let importer = self.get_module(*importer).unwrap();
-                let importer_name = interner.resolve(importer.interned_name).unwrap();
-                let imported = self.get_module(*imported).unwrap();
-                let imported_name = interner.resolve(imported.interned_name).unwrap();
-                importer_expression.is_match(importer_name)
-                    && imported_expression.is_match(imported_name)
+                    .filter(|imported| importeds.contains(*imported))
+                    .map(move |imported| (*importer, *imported))
             })
             .collect()
     }
@@ -117,6 +161,76 @@ impl Graph {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_modules_directly_imported_by() {
+        let mut graph = Graph::default();
+
+        let animals = graph.get_or_add_module("pkg.animals").token;
+        let dog = graph.get_or_add_module("pkg.animals.dog").token;
+        let cat = graph.get_or_add_module("pkg.animals.cat").token;
+        let food = graph.get_or_add_module("pkg.food").token;
+        let chicken = graph.get_or_add_module("pkg.food.chicken").token;
+        let tesco = graph.get_or_add_module("pkg.shops.tesco").token;
+
+        graph.add_import(dog, chicken);
+        graph.add_import(cat, food);
+        // An import within the package.
+        graph.add_import(dog, cat);
+        // An import of the package, not by it.
+        graph.add_import(tesco, animals);
+
+        // Without as_package, only the module itself is looked at.
+        assert_eq!(
+            graph.modules_directly_imported_by(animals, false),
+            FxHashSet::default()
+        );
+        assert_eq!(
+            graph.modules_directly_imported_by(dog, false),
+            FxHashSet::from_iter([chicken, cat])
+        );
+        // With as_package, descendants are looked at too, but modules within the package
+        // are excluded.
+        assert_eq!(
+            graph.modules_directly_imported_by(animals, true),
+            FxHashSet::from_iter([chicken, food])
+        );
+    }
+
+    #[test]
+    fn test_modules_that_directly_import() {
+        let mut graph = Graph::default();
+
+        let animals = graph.get_or_add_module("pkg.animals").token;
+        let dog = graph.get_or_add_module("pkg.animals.dog").token;
+        let cat = graph.get_or_add_module("pkg.animals.cat").token;
+        let chicken = graph.get_or_add_module("pkg.food.chicken").token;
+        let shops = graph.get_or_add_module("pkg.shops").token;
+        let tesco = graph.get_or_add_module("pkg.shops.tesco").token;
+
+        graph.add_import(tesco, animals);
+        graph.add_import(shops, cat);
+        // An import within the package.
+        graph.add_import(dog, cat);
+        // An import by the package, not of it.
+        graph.add_import(dog, chicken);
+
+        // Without as_package, only the module itself is looked at.
+        assert_eq!(
+            graph.modules_that_directly_import(animals, false),
+            FxHashSet::from_iter([tesco])
+        );
+        assert_eq!(
+            graph.modules_that_directly_import(cat, false),
+            FxHashSet::from_iter([shops, dog])
+        );
+        // With as_package, descendants are looked at too, but modules within the package
+        // are excluded.
+        assert_eq!(
+            graph.modules_that_directly_import(animals, true),
+            FxHashSet::from_iter([tesco, shops])
+        );
+    }
 
     #[test]
     fn test_find_matching_direct_imports() {
@@ -154,5 +268,61 @@ mod test {
             matching_imports,
             FxHashSet::from_iter([(dog, chicken), (cat, fish)])
         );
+    }
+
+    #[test]
+    fn test_find_matching_direct_imports_with_and_without_wildcards() {
+        let mut graph = Graph::default();
+
+        let dog = graph.get_or_add_module("pkg.animals.dog").token;
+        let cat = graph.get_or_add_module("pkg.animals.cat").token;
+        let chicken = graph.get_or_add_module("pkg.food.chicken").token;
+        let fish = graph.get_or_add_module("pkg.food.fish").token;
+        let golden = graph.get_or_add_module("pkg.colors.golden").token;
+        let tesco = graph.get_or_add_module("pkg.shops.tesco").token;
+        graph.get_or_add_module("pkg.shops.coop");
+
+        graph.add_import(dog, chicken);
+        graph.add_import(dog, golden);
+        graph.add_import(cat, fish);
+        graph.add_import(tesco, chicken);
+
+        let find = |importer_expression: &str, imported_expression: &str| {
+            graph.find_matching_direct_imports(
+                &importer_expression.parse().unwrap(),
+                &imported_expression.parse().unwrap(),
+            )
+        };
+
+        // Neither side has wildcards.
+        assert_eq!(
+            find("pkg.animals.dog", "pkg.food.chicken"),
+            FxHashSet::from_iter([(dog, chicken)])
+        );
+        // Only the importer is a single module.
+        assert_eq!(
+            find("pkg.animals.dog", "pkg.*.*"),
+            FxHashSet::from_iter([(dog, chicken), (dog, golden)])
+        );
+        // Only the imported is a single module.
+        assert_eq!(
+            find("pkg.*.*", "pkg.food.chicken"),
+            FxHashSet::from_iter([(dog, chicken), (tesco, chicken)])
+        );
+        // Both sides have wildcards.
+        assert_eq!(
+            find("pkg.shops.*", "pkg.food.*"),
+            FxHashSet::from_iter([(tesco, chicken)])
+        );
+        // A module with no imports.
+        assert!(find("pkg.shops.coop", "pkg.*.*").is_empty());
+        // A module that has no importers.
+        assert!(find("pkg.*.*", "pkg.shops.coop").is_empty());
+        // Modules that aren't in the graph.
+        assert!(find("pkg.animals.missing", "pkg.*.*").is_empty());
+        assert!(find("pkg.*.*", "pkg.food.missing").is_empty());
+        assert!(find("pkg.animals.missing", "pkg.food.missing").is_empty());
+        // Wildcards that match nothing.
+        assert!(find("pkg.nothing.*", "pkg.*.*").is_empty());
     }
 }

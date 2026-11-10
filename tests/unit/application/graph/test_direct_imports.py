@@ -34,20 +34,62 @@ def test_find_modules_that_directly_import():
     assert {a, f} == graph.find_modules_that_directly_import("bar")
 
 
-def test_find_modules_directly_imported_by_raises_module_not_present():
+def test_find_modules_directly_imported_by_as_package():
+    graph = ImportGraph()
+    graph.add_import(importer="foo", imported="bar")
+    graph.add_import(importer="foo.one", imported="baz")
+    graph.add_import(importer="foo.one.alpha", imported="baz.one")
+    # Imports within the package.
+    graph.add_import(importer="foo.one", imported="foo.two")
+    graph.add_import(importer="foo.two", imported="foo")
+    # Imports of the package are not imports by the package.
+    graph.add_import(importer="qux", imported="foo")
+
+    assert {"bar"} == graph.find_modules_directly_imported_by("foo")
+    assert {"bar", "baz", "baz.one"} == graph.find_modules_directly_imported_by(
+        "foo", as_package=True
+    )
+    assert {"baz", "baz.one", "foo.two"} == graph.find_modules_directly_imported_by(
+        "foo.one", as_package=True
+    )
+
+
+def test_find_modules_that_directly_import_as_package():
+    graph = ImportGraph()
+    graph.add_import(importer="bar", imported="foo")
+    graph.add_import(importer="baz", imported="foo.one")
+    graph.add_import(importer="baz.one", imported="foo.one.alpha")
+    # Imports within the package.
+    graph.add_import(importer="foo.two", imported="foo.one")
+    graph.add_import(importer="foo", imported="foo.two")
+    # Imports by the package are not imports of the package.
+    graph.add_import(importer="foo", imported="qux")
+
+    assert {"bar"} == graph.find_modules_that_directly_import("foo")
+    assert {"bar", "baz", "baz.one"} == graph.find_modules_that_directly_import(
+        "foo", as_package=True
+    )
+    assert {"baz", "baz.one", "foo.two"} == graph.find_modules_that_directly_import(
+        "foo.one", as_package=True
+    )
+
+
+@pytest.mark.parametrize("as_package", (False, True))
+def test_find_modules_directly_imported_by_raises_module_not_present(as_package):
     graph = ImportGraph()
     graph.add_module("foo")
 
     with pytest.raises(ModuleNotPresent, match=re.escape('"bar" not present in the graph.')):
-        graph.find_modules_directly_imported_by("bar")
+        graph.find_modules_directly_imported_by("bar", as_package=as_package)
 
 
-def test_find_modules_that_directly_import_raises_module_not_present():
+@pytest.mark.parametrize("as_package", (False, True))
+def test_find_modules_that_directly_import_raises_module_not_present(as_package):
     graph = ImportGraph()
     graph.add_module("foo")
 
     with pytest.raises(ModuleNotPresent, match=re.escape('"bar" not present in the graph.')):
-        graph.find_modules_that_directly_import("bar")
+        graph.find_modules_that_directly_import("bar", as_package=as_package)
 
 
 @pytest.mark.parametrize(
@@ -342,6 +384,58 @@ class TestFindMatchingDirectImports:
         assert graph.find_matching_direct_imports("pkg.animals.* -> pkg.food.*") == [
             {"importer": "pkg.animals.cat", "imported": "pkg.food.fish"},
             {"importer": "pkg.animals.dog", "imported": "pkg.food.chicken"},
+        ]
+
+    @pytest.mark.parametrize(
+        "expression, expected_imports",
+        [
+            # Neither side has wildcards.
+            (
+                "pkg.animals.dog -> pkg.food.chicken",
+                [("pkg.animals.dog", "pkg.food.chicken")],
+            ),
+            # Only the importer has no wildcards.
+            (
+                "pkg.animals.dog -> pkg.*.*",
+                [
+                    ("pkg.animals.dog", "pkg.colors.golden"),
+                    ("pkg.animals.dog", "pkg.food.chicken"),
+                ],
+            ),
+            # Only the imported has no wildcards.
+            (
+                "pkg.*.* -> pkg.food.chicken",
+                [("pkg.animals.dog", "pkg.food.chicken"), ("pkg.shops.tesco", "pkg.food.chicken")],
+            ),
+            # Both sides have wildcards.
+            (
+                "pkg.shops.* -> pkg.food.*",
+                [("pkg.shops.tesco", "pkg.food.chicken")],
+            ),
+            # A module that doesn't import anything.
+            ("pkg.shops.coop -> pkg.*.*", []),
+            # A module that isn't imported by anything.
+            ("pkg.*.* -> pkg.shops.coop", []),
+            # Modules that aren't in the graph.
+            ("pkg.animals.missing -> pkg.*.*", []),
+            ("pkg.*.* -> pkg.food.missing", []),
+            ("pkg.animals.missing -> pkg.food.missing", []),
+            # Wildcards that match nothing.
+            ("pkg.nothing.* -> pkg.*.*", []),
+        ],
+    )
+    def test_finds_matching_direct_imports_with_and_without_wildcards(
+        self, expression, expected_imports
+    ):
+        graph = ImportGraph()
+        graph.add_module("pkg.shops.coop")
+        graph.add_import(importer="pkg.animals.dog", imported="pkg.food.chicken")
+        graph.add_import(importer="pkg.animals.dog", imported="pkg.colors.golden")
+        graph.add_import(importer="pkg.animals.cat", imported="pkg.food.fish")
+        graph.add_import(importer="pkg.shops.tesco", imported="pkg.food.chicken")
+
+        assert graph.find_matching_direct_imports(expression) == [
+            {"importer": importer, "imported": imported} for importer, imported in expected_imports
         ]
 
     def test_deduplicates_imports(self):

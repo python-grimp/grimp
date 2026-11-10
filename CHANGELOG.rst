@@ -5,7 +5,9 @@ Changelog
 latest
 ------
 
-* Speed up ``ImportGraph.find_matching_modules`` for expressions that don't contain wildcards.
+* Speed up ``find_matching_modules`` for expressions that don't contain wildcards.
+* Speed up ``find_matching_direct_imports``.
+* Add ``as_package`` parameter to ``find_modules_directly_imported_by`` and ``find_modules_that_directly_import``.
 
 3.19 (2026-11-06)
 -----------------
