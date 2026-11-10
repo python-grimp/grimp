@@ -2,6 +2,11 @@
 Changelog
 =========
 
+latest
+------
+
+* Speed up ``ImportGraph.find_matching_modules`` for expressions that don't contain wildcards.
+
 3.19 (2026-11-06)
 -----------------
 

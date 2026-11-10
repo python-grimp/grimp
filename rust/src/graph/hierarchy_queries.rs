@@ -54,12 +54,19 @@ impl Graph {
         &self,
         expression: &ModuleExpression,
     ) -> impl ModuleIterator<'_> + use<'_> {
-        let interner = MODULE_NAMES.read().unwrap();
-        let modules: FxHashSet<_> = self
-            .modules
-            .values()
-            .filter(|m| expression.is_match(interner.resolve(m.interned_name).unwrap()))
-            .collect();
+        let modules: FxHashSet<_> = if expression.as_ref().contains('*') {
+            let interner = MODULE_NAMES.read().unwrap();
+            self.modules
+                .values()
+                .filter(|m| expression.is_match(interner.resolve(m.interned_name).unwrap()))
+                .collect()
+        } else {
+            // Without wildcards the expression can only match the module with that name,
+            // so there's no need to check every module.
+            self.get_module_by_name(expression.as_ref())
+                .into_iter()
+                .collect()
+        };
         modules.into_iter()
     }
 }
@@ -80,6 +87,8 @@ mod tests {
 
     #[parameterized(case = {
         FindMatchingModulesTestCase::new("foo", ["foo"]),
+        FindMatchingModulesTestCase::new("foo.bar.baz", ["foo.bar.baz"]),
+        FindMatchingModulesTestCase::new("foo.missing", Vec::<&str>::new()),
         FindMatchingModulesTestCase::new("foo.*", ["foo.bar"]),
         FindMatchingModulesTestCase::new("foo.**", ["foo.bar", "foo.bar.baz"]),
     })]
