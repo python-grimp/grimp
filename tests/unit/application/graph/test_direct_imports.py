@@ -344,6 +344,58 @@ class TestFindMatchingDirectImports:
             {"importer": "pkg.animals.dog", "imported": "pkg.food.chicken"},
         ]
 
+    @pytest.mark.parametrize(
+        "expression, expected_imports",
+        [
+            # Neither side has wildcards.
+            (
+                "pkg.animals.dog -> pkg.food.chicken",
+                [("pkg.animals.dog", "pkg.food.chicken")],
+            ),
+            # Only the importer has no wildcards.
+            (
+                "pkg.animals.dog -> pkg.*.*",
+                [
+                    ("pkg.animals.dog", "pkg.colors.golden"),
+                    ("pkg.animals.dog", "pkg.food.chicken"),
+                ],
+            ),
+            # Only the imported has no wildcards.
+            (
+                "pkg.*.* -> pkg.food.chicken",
+                [("pkg.animals.dog", "pkg.food.chicken"), ("pkg.shops.tesco", "pkg.food.chicken")],
+            ),
+            # Both sides have wildcards.
+            (
+                "pkg.shops.* -> pkg.food.*",
+                [("pkg.shops.tesco", "pkg.food.chicken")],
+            ),
+            # A module that doesn't import anything.
+            ("pkg.shops.coop -> pkg.*.*", []),
+            # A module that isn't imported by anything.
+            ("pkg.*.* -> pkg.shops.coop", []),
+            # Modules that aren't in the graph.
+            ("pkg.animals.missing -> pkg.*.*", []),
+            ("pkg.*.* -> pkg.food.missing", []),
+            ("pkg.animals.missing -> pkg.food.missing", []),
+            # Wildcards that match nothing.
+            ("pkg.nothing.* -> pkg.*.*", []),
+        ],
+    )
+    def test_finds_matching_direct_imports_with_and_without_wildcards(
+        self, expression, expected_imports
+    ):
+        graph = ImportGraph()
+        graph.add_module("pkg.shops.coop")
+        graph.add_import(importer="pkg.animals.dog", imported="pkg.food.chicken")
+        graph.add_import(importer="pkg.animals.dog", imported="pkg.colors.golden")
+        graph.add_import(importer="pkg.animals.cat", imported="pkg.food.fish")
+        graph.add_import(importer="pkg.shops.tesco", imported="pkg.food.chicken")
+
+        assert graph.find_matching_direct_imports(expression) == [
+            {"importer": importer, "imported": imported} for importer, imported in expected_imports
+        ]
+
     def test_deduplicates_imports(self):
         graph = ImportGraph()
         graph.add_import(

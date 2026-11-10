@@ -6,6 +6,8 @@ latest
 ------
 
 * Speed up ``ImportGraph.find_matching_modules`` for expressions that don't contain wildcards.
+* Speed up ``ImportGraph.find_matching_direct_imports`` by only looking at the imports of the modules that match
+  one of the expressions.
 
 3.19 (2026-11-06)
 -----------------
