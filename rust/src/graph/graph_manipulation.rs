@@ -91,10 +91,10 @@ impl Graph {
         self.module_children.remove(module);
 
         // Update imports.
-        for imported in self.modules_directly_imported_by(module).clone() {
+        for imported in self.modules_directly_imported_by(module, false) {
             self.remove_import(module, imported);
         }
-        for importer in self.modules_that_directly_import(module).clone() {
+        for importer in self.modules_that_directly_import(module, false) {
             self.remove_import(importer, module);
         }
         self.imports.remove(module);
@@ -164,19 +164,11 @@ impl Graph {
 
         let modules_imported_by_descendants: FxHashSet<_> = descendants
             .iter()
-            .flat_map(|descendant| {
-                self.modules_directly_imported_by(*descendant)
-                    .iter()
-                    .cloned()
-            })
+            .flat_map(|descendant| self.modules_directly_imported_by(*descendant, false))
             .collect();
         let modules_that_import_descendants: FxHashSet<_> = descendants
             .iter()
-            .flat_map(|descendant| {
-                self.modules_that_directly_import(*descendant)
-                    .iter()
-                    .cloned()
-            })
+            .flat_map(|descendant| self.modules_that_directly_import(*descendant, false))
             .collect();
 
         // Add descendants and imports to parent module.

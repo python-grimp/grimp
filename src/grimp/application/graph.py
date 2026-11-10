@@ -223,27 +223,41 @@ class ImportGraph:
             importer=importer, imported=imported, as_packages=as_packages
         )
 
-    def find_modules_directly_imported_by(self, module: str) -> set[str]:
+    def find_modules_directly_imported_by(self, module: str, as_package: bool = False) -> set[str]:
         """
         Find all modules that are directly imported by the supplied module.
 
+        Args:
+            module:     The name of the importing module.
+            as_package: Whether or not to treat the supplied module as an individual module,
+                        or as a package (i.e. including any descendants, if there are any). If
+                        treating it as a package, the result will include modules *external* to
+                        the package, and won't include modules within it.
+
         If the module is not present in the graph, grimp.exceptions.ModuleNotPresent will be raised.
         """
         if not self._rustgraph.contains_module(module):
             msg = f'"{module}" not present in the graph.'
             raise ModuleNotPresent(msg)
-        return self._rustgraph.find_modules_directly_imported_by(module)
+        return self._rustgraph.find_modules_directly_imported_by(module, as_package)
 
-    def find_modules_that_directly_import(self, module: str) -> set[str]:
+    def find_modules_that_directly_import(self, module: str, as_package: bool = False) -> set[str]:
         """
         Find all modules that directly import the supplied module.
 
+        Args:
+            module:     The name of the imported module.
+            as_package: Whether or not to treat the supplied module as an individual module,
+                        or as a package (i.e. including any descendants, if there are any). If
+                        treating it as a package, the result will include modules *external* to
+                        the package, and won't include modules within it.
+
         If the module is not present in the graph, grimp.exceptions.ModuleNotPresent will be raised.
         """
         if not self._rustgraph.contains_module(module):
             msg = f'"{module}" not present in the graph.'
             raise ModuleNotPresent(msg)
-        return self._rustgraph.find_modules_that_directly_import(module)
+        return self._rustgraph.find_modules_that_directly_import(module, as_package)
 
     def get_import_details(self, *, importer: str, imported: str) -> list[DetailedImport]:
         """

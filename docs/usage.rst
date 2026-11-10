@@ -145,15 +145,23 @@ Methods for analysing direct imports
     :return: Whether or not the importer directly imports the imported module.
     :rtype: ``True`` or ``False``.
 
-.. py:function:: ImportGraph.find_modules_directly_imported_by(module)
+.. py:function:: ImportGraph.find_modules_directly_imported_by(module, as_package=False)
 
     :param str module: A module name.
+    :param bool as_package: Whether or not to treat the supplied module as an individual module,
+                           or as a package (i.e. including any descendants, if there are any). If
+                           treating it as a package, the result will include modules *external* to the
+                           package, and won't include modules within it.
     :return: Set of all modules in the graph are imported by the supplied module.
     :rtype: A set of strings.
 
-.. py:function:: ImportGraph.find_modules_that_directly_import(module)
+.. py:function:: ImportGraph.find_modules_that_directly_import(module, as_package=False)
 
     :param str module: A module name.
+    :param bool as_package: Whether or not to treat the supplied module as an individual module,
+                           or as a package (i.e. including any descendants, if there are any). If
+                           treating it as a package, the result will include modules *external* to the
+                           package, and won't include modules within it.
     :return: Set of all modules in the graph that directly import the supplied module.
     :rtype: A set of strings.
 

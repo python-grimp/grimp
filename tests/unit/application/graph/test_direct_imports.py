@@ -34,20 +34,62 @@ def test_find_modules_that_directly_import():
     assert {a, f} == graph.find_modules_that_directly_import("bar")
 
 
-def test_find_modules_directly_imported_by_raises_module_not_present():
+def test_find_modules_directly_imported_by_as_package():
+    graph = ImportGraph()
+    graph.add_import(importer="foo", imported="bar")
+    graph.add_import(importer="foo.one", imported="baz")
+    graph.add_import(importer="foo.one.alpha", imported="baz.one")
+    # Imports within the package.
+    graph.add_import(importer="foo.one", imported="foo.two")
+    graph.add_import(importer="foo.two", imported="foo")
+    # Imports of the package are not imports by the package.
+    graph.add_import(importer="qux", imported="foo")
+
+    assert {"bar"} == graph.find_modules_directly_imported_by("foo")
+    assert {"bar", "baz", "baz.one"} == graph.find_modules_directly_imported_by(
+        "foo", as_package=True
+    )
+    assert {"baz", "baz.one", "foo.two"} == graph.find_modules_directly_imported_by(
+        "foo.one", as_package=True
+    )
+
+
+def test_find_modules_that_directly_import_as_package():
+    graph = ImportGraph()
+    graph.add_import(importer="bar", imported="foo")
+    graph.add_import(importer="baz", imported="foo.one")
+    graph.add_import(importer="baz.one", imported="foo.one.alpha")
+    # Imports within the package.
+    graph.add_import(importer="foo.two", imported="foo.one")
+    graph.add_import(importer="foo", imported="foo.two")
+    # Imports by the package are not imports of the package.
+    graph.add_import(importer="foo", imported="qux")
+
+    assert {"bar"} == graph.find_modules_that_directly_import("foo")
+    assert {"bar", "baz", "baz.one"} == graph.find_modules_that_directly_import(
+        "foo", as_package=True
+    )
+    assert {"baz", "baz.one", "foo.two"} == graph.find_modules_that_directly_import(
+        "foo.one", as_package=True
+    )
+
+
+@pytest.mark.parametrize("as_package", (False, True))
+def test_find_modules_directly_imported_by_raises_module_not_present(as_package):
     graph = ImportGraph()
     graph.add_module("foo")
 
     with pytest.raises(ModuleNotPresent, match=re.escape('"bar" not present in the graph.')):
-        graph.find_modules_directly_imported_by("bar")
+        graph.find_modules_directly_imported_by("bar", as_package=as_package)
 
 
-def test_find_modules_that_directly_import_raises_module_not_present():
+@pytest.mark.parametrize("as_package", (False, True))
+def test_find_modules_that_directly_import_raises_module_not_present(as_package):
     graph = ImportGraph()
     graph.add_module("foo")
 
     with pytest.raises(ModuleNotPresent, match=re.escape('"bar" not present in the graph.')):
-        graph.find_modules_that_directly_import("bar")
+        graph.find_modules_that_directly_import("bar", as_package=as_package)
 
 
 @pytest.mark.parametrize(
