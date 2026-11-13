@@ -2,8 +2,8 @@
 Changelog
 =========
 
-latest
-------
+3.20 (2026-11-13)
+-----------------
 
 * Speed up ``find_matching_modules`` for expressions that don't contain wildcards.
 * Speed up ``find_matching_direct_imports``.
