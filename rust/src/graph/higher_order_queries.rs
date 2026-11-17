@@ -134,7 +134,7 @@ impl Graph {
     ) -> GrimpResult<Option<PackageDependency>> {
         // Shortcut the detailed implementation in the case of no chains.
         // This will be much faster!
-        if !self.chain_exists(from_layer, to_layer, true)? {
+        if !self.chain_exists(from_layer, to_layer, true, false)? {
             return Ok(None);
         }
 
@@ -173,7 +173,7 @@ impl Graph {
             let heads = from_layer_with_descendants
                 .iter()
                 .filter(|importer| {
-                    self.direct_import_exists(**importer, *middle.first().unwrap(), false)
+                    self.direct_import_exists(**importer, *middle.first().unwrap(), false, false)
                         .unwrap()
                 })
                 .cloned()
@@ -181,7 +181,7 @@ impl Graph {
             let tails = to_layer_with_descendants
                 .iter()
                 .filter(|imported| {
-                    self.direct_import_exists(*middle.last().unwrap(), **imported, false)
+                    self.direct_import_exists(*middle.last().unwrap(), **imported, false, false)
                         .unwrap()
                 })
                 .cloned()

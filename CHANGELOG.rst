@@ -2,6 +2,13 @@
 Changelog
 =========
 
+latest
+------
+
+* Add ``exclude_shared_descendants`` parameter to ``find_shortest_chain``, ``find_shortest_chains``,
+  ``chain_exists`` and ``direct_import_exists``, to allow searching between packages where one
+  contains the other.
+
 3.20 (2026-11-13)
 -----------------
 

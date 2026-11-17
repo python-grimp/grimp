@@ -44,22 +44,35 @@ impl Graph {
 
     /// Return the sets of modules to search between, for an importer and an imported module.
     ///
-    /// If `as_packages` is true, each set includes the descendants of the module. In that case, it
-    /// is an error if the sets have modules in common (i.e. one module is a descendant of the
-    /// other, or they are the same module).
+    /// If `as_packages` is true, each set includes the descendants of the module. In that case, if
+    /// the sets have modules in common (i.e. one module is a descendant of the other, or they are
+    /// the same module), it is an error, unless `exclude_shared_descendants` is true. If it is,
+    /// the shared modules - which are the whole of the inner package - are removed from the outer
+    /// package. If the modules are the same, nothing is left in the importer set.
     pub fn get_importer_and_imported_modules(
         &self,
         importer: ModuleToken,
         imported: ModuleToken,
         as_packages: bool,
+        exclude_shared_descendants: bool,
     ) -> GrimpResult<(FxHashSet<ModuleToken>, FxHashSet<ModuleToken>)> {
         let mut importers = FxHashSet::from_iter([importer]);
         let mut importeds = FxHashSet::from_iter([imported]);
         if as_packages {
             importers.extend_with_descendants(self);
             importeds.extend_with_descendants(self);
-            if !importers.is_disjoint(&importeds) {
-                return Err(GrimpError::SharedDescendants);
+
+            let shared: FxHashSet<_> = importers.intersection(&importeds).cloned().collect();
+            if !shared.is_empty() {
+                if !exclude_shared_descendants {
+                    return Err(GrimpError::SharedDescendants);
+                }
+                let outer = if importers.len() >= importeds.len() {
+                    &mut importers
+                } else {
+                    &mut importeds
+                };
+                outer.retain(|module| !shared.contains(module));
             }
         }
         Ok((importers, importeds))

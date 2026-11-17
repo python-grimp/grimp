@@ -16,9 +16,14 @@ impl Graph {
         importer: ModuleToken,
         imported: ModuleToken,
         as_packages: bool,
+        exclude_shared_descendants: bool,
     ) -> GrimpResult<bool> {
-        let (importers, importeds) =
-            self.get_importer_and_imported_modules(importer, imported, as_packages)?;
+        let (importers, importeds) = self.get_importer_and_imported_modules(
+            importer,
+            imported,
+            as_packages,
+            exclude_shared_descendants,
+        )?;
 
         let direct_imports = importers
             .iter()
@@ -37,7 +42,7 @@ impl Graph {
         let mut all_imports: FxHashSet<(ModuleToken, ModuleToken)> = FxHashSet::default();
 
         let (importers, importeds) =
-            self.get_importer_and_imported_modules(importer, imported, as_packages)?;
+            self.get_importer_and_imported_modules(importer, imported, as_packages, false)?;
 
         for importer_module in importers.iter() {
             if let Some(all_imports_imported_by_this_one) = self.imports.get(*importer_module) {

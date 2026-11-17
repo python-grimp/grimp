@@ -380,18 +380,22 @@ impl GraphWrapper {
             .collect())
     }
 
-    #[pyo3(signature = (*, importer, imported, as_packages = false))]
+    #[pyo3(signature = (*, importer, imported, as_packages = false, exclude_shared_descendants = false))]
     pub fn direct_import_exists(
         &self,
         importer: &str,
         imported: &str,
         as_packages: bool,
+        exclude_shared_descendants: bool,
     ) -> PyResult<bool> {
         let importer = self.get_visible_module_by_name(importer)?.token();
         let imported = self.get_visible_module_by_name(imported)?.token();
-        Ok(self
-            ._graph
-            .direct_import_exists(importer, imported, as_packages)?)
+        Ok(self._graph.direct_import_exists(
+            importer,
+            imported,
+            as_packages,
+            exclude_shared_descendants,
+        )?)
     }
 
     #[pyo3(signature = (module, as_package=false))]
@@ -550,18 +554,19 @@ impl GraphWrapper {
             .collect())
     }
 
-    #[pyo3(signature = (importer, imported, as_packages=false))]
+    #[pyo3(signature = (importer, imported, as_packages=false, exclude_shared_descendants=false))]
     pub fn find_shortest_chain(
         &self,
         importer: &str,
         imported: &str,
         as_packages: bool,
+        exclude_shared_descendants: bool,
     ) -> PyResult<Option<Vec<String>>> {
         let importer = self.get_visible_module_by_name(importer)?.token();
         let imported = self.get_visible_module_by_name(imported)?.token();
         Ok(self
             ._graph
-            .find_shortest_chain(importer, imported, as_packages)?
+            .find_shortest_chain(importer, imported, as_packages, exclude_shared_descendants)?
             .map(|chain| {
                 chain
                     .iter()
@@ -571,31 +576,35 @@ impl GraphWrapper {
             }))
     }
 
-    #[pyo3(signature = (importer, imported, as_packages=false))]
+    #[pyo3(signature = (importer, imported, as_packages=false, exclude_shared_descendants=false))]
     pub fn chain_exists(
         &self,
         importer: &str,
         imported: &str,
         as_packages: bool,
+        exclude_shared_descendants: bool,
     ) -> PyResult<bool> {
         let importer = self.get_visible_module_by_name(importer)?.token();
         let imported = self.get_visible_module_by_name(imported)?.token();
-        Ok(self._graph.chain_exists(importer, imported, as_packages)?)
+        Ok(self
+            ._graph
+            .chain_exists(importer, imported, as_packages, exclude_shared_descendants)?)
     }
 
-    #[pyo3(signature = (importer, imported, as_packages=true))]
+    #[pyo3(signature = (importer, imported, as_packages=true, exclude_shared_descendants=false))]
     pub fn find_shortest_chains<'py>(
         &self,
         py: Python<'py>,
         importer: &str,
         imported: &str,
         as_packages: bool,
+        exclude_shared_descendants: bool,
     ) -> PyResult<Bound<'py, PySet>> {
         let importer = self.get_visible_module_by_name(importer)?.token();
         let imported = self.get_visible_module_by_name(imported)?.token();
         let chains = self
             ._graph
-            .find_shortest_chains(importer, imported, as_packages)?
+            .find_shortest_chains(importer, imported, as_packages, exclude_shared_descendants)?
             .into_iter()
             .map(|chain| {
                 PyTuple::new(

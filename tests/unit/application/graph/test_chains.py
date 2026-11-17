@@ -227,6 +227,74 @@ class TestFindShortestChains:
 
         assert result == {(importer, middle, imported)}
 
+    def test_exclude_shared_descendants_when_imported_is_inside_importer(self):
+        graph = ImportGraph()
+        for module in ("pkg", "pkg.inner", "pkg.inner.leaf", "pkg.other", "pkg.other.leaf"):
+            graph.add_module(module)
+        graph.add_import(importer="pkg.other.leaf", imported="pkg.inner.leaf")
+        graph.add_import(importer="pkg.inner.leaf", imported="pkg.inner")  # Within the overlap.
+
+        result = graph.find_shortest_chains(
+            importer="pkg",
+            imported="pkg.inner",
+            as_packages=True,
+            exclude_shared_descendants=True,
+        )
+
+        assert result == {("pkg.other.leaf", "pkg.inner.leaf")}
+
+    def test_exclude_shared_descendants_when_importer_is_inside_imported(self):
+        graph = ImportGraph()
+        for module in ("pkg", "pkg.inner", "pkg.inner.leaf", "pkg.other"):
+            graph.add_module(module)
+        graph.add_import(importer="pkg.inner.leaf", imported="pkg.other")
+        graph.add_import(importer="pkg.other", imported="pkg.inner")  # Wrong direction.
+
+        result = graph.find_shortest_chains(
+            importer="pkg.inner",
+            imported="pkg",
+            as_packages=True,
+            exclude_shared_descendants=True,
+        )
+
+        assert result == {("pkg.inner.leaf", "pkg.other")}
+
+    def test_exclude_shared_descendants_with_identical_modules_finds_nothing(self):
+        graph = ImportGraph()
+        graph.add_module("pkg")
+        graph.add_import(importer="pkg.a", imported="pkg.b")
+
+        result = graph.find_shortest_chains(
+            importer="pkg", imported="pkg", as_packages=True, exclude_shared_descendants=True
+        )
+
+        assert result == set()
+
+    def test_exclude_shared_descendants_has_no_effect_without_overlap(self):
+        graph = ImportGraph()
+        graph.add_module("green")
+        graph.add_module("blue")
+        graph.add_import(importer="green.one", imported="blue.two")
+
+        result = graph.find_shortest_chains(
+            importer="green", imported="blue", exclude_shared_descendants=True
+        )
+
+        assert result == {("green.one", "blue.two")}
+
+    def test_exclude_shared_descendants_has_no_effect_if_not_as_packages(self):
+        graph = ImportGraph()
+        graph.add_import(importer="pkg", imported="pkg.inner")
+
+        result = graph.find_shortest_chains(
+            importer="pkg",
+            imported="pkg.inner",
+            as_packages=False,
+            exclude_shared_descendants=True,
+        )
+
+        assert result == {("pkg", "pkg.inner")}
+
     @pytest.mark.parametrize("as_packages", (False, True))
     def test_top_level_import(self, as_packages: bool):
         graph = ImportGraph()
