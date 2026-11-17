@@ -208,7 +208,12 @@ class ImportGraph:
     # --------------
 
     def direct_import_exists(
-        self, *, importer: str, imported: str, as_packages: bool = False
+        self,
+        *,
+        importer: str,
+        imported: str,
+        as_packages: bool = False,
+        exclude_shared_descendants: bool = False,
     ) -> bool:
         """
         Whether or not the importer module directly imports the imported module.
@@ -218,9 +223,18 @@ class ImportGraph:
             imported:     Name of the imported module.
             as_packages:  Whether or not to treat the supplied modules as individual modules,
                           or as entire packages (including any descendants).
+            exclude_shared_descendants:
+                          Only applies if as_packages is True. By default, modules with shared
+                          descendants (i.e. one is a package that contains the other) raise a
+                          ValueError. If True, the shared descendants are instead excluded from the
+                          outer package, so imports are checked between the inner package and the
+                          rest of the outer package.
         """
         return self._rustgraph.direct_import_exists(
-            importer=importer, imported=imported, as_packages=as_packages
+            importer=importer,
+            imported=imported,
+            as_packages=as_packages,
+            exclude_shared_descendants=exclude_shared_descendants,
         )
 
     def find_modules_directly_imported_by(self, module: str, as_package: bool = False) -> set[str]:
@@ -370,7 +384,11 @@ class ImportGraph:
         return self._rustgraph.find_upstream_modules(module, as_package)
 
     def find_shortest_chain(
-        self, importer: str, imported: str, as_packages: bool = False
+        self,
+        importer: str,
+        imported: str,
+        as_packages: bool = False,
+        exclude_shared_descendants: bool = False,
     ) -> tuple[str, ...] | None:
         """
         Attempt to find the shortest chain of imports between two modules, in the direction
@@ -381,6 +399,12 @@ class ImportGraph:
                          or as packages (including any descendants, if there are any). If
                          treating them as subpackages, all descendants of the supplied modules
                          will be checked too.
+            exclude_shared_descendants:
+                         Only applies if as_packages is True. By default, modules with shared
+                         descendants (i.e. one is a package that contains the other) raise a
+                         ValueError. If True, the shared descendants are instead excluded from the
+                         outer package, so chains are searched between the inner package and the
+                         rest of the outer package.
 
         Returns:
             Tuple of module names, from importer to imported, or None if no chain exists.
@@ -390,11 +414,17 @@ class ImportGraph:
                 msg = f"Module {module} is not present in the graph."
                 raise ValueError(msg)
 
-        chain = self._rustgraph.find_shortest_chain(importer, imported, as_packages)
+        chain = self._rustgraph.find_shortest_chain(
+            importer, imported, as_packages, exclude_shared_descendants
+        )
         return tuple(chain) if chain else None
 
     def find_shortest_chains(
-        self, importer: str, imported: str, as_packages: bool = True
+        self,
+        importer: str,
+        imported: str,
+        as_packages: bool = True,
+        exclude_shared_descendants: bool = False,
     ) -> set[tuple[str, ...]]:
         """
         Find the shortest import chains that exist between the importer and imported, and
@@ -405,12 +435,24 @@ class ImportGraph:
         The default behavior is to treat the import and imported as packages, however, if
         as_packages is False, both the importer and imported will be treated as modules instead.
 
+        If exclude_shared_descendants is True (only applicable if as_packages is True), and one of
+        the modules is a package containing the other, the contained package is excluded from the
+        outer package, rather than a ValueError being raised.
+
         Returns:
             A set of tuples of strings. Each tuple is ordered from importer to imported modules.
         """
-        return self._rustgraph.find_shortest_chains(importer, imported, as_packages)
+        return self._rustgraph.find_shortest_chains(
+            importer, imported, as_packages, exclude_shared_descendants
+        )
 
-    def chain_exists(self, importer: str, imported: str, as_packages: bool = False) -> bool:
+    def chain_exists(
+        self,
+        importer: str,
+        imported: str,
+        as_packages: bool = False,
+        exclude_shared_descendants: bool = False,
+    ) -> bool:
         """
         Return whether any chain of imports exists between the two modules, in the direction
         of importer to imported. In other words, does the importer depend on the imported?
@@ -420,8 +462,16 @@ class ImportGraph:
                          or as packages (including any descendants, if there are any). If
                          treating them as subpackages, all descendants of the supplied modules
                          will be checked too.
+            exclude_shared_descendants:
+                         Only applies if as_packages is True. By default, modules with shared
+                         descendants (i.e. one is a package that contains the other) raise a
+                         ValueError. If True, the shared descendants are instead excluded from the
+                         outer package, so chains are searched between the inner package and the
+                         rest of the outer package.
         """
-        return self._rustgraph.chain_exists(importer, imported, as_packages)
+        return self._rustgraph.chain_exists(
+            importer, imported, as_packages, exclude_shared_descendants
+        )
 
     # High level analysis
     # -------------------

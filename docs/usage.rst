@@ -136,12 +136,16 @@ Methods for analysing the module tree
 Methods for analysing direct imports
 ------------------------------------
 
-.. py:function:: ImportGraph.direct_import_exists(importer, imported, as_packages=False)
+.. py:function:: ImportGraph.direct_import_exists(importer, imported, as_packages=False, exclude_shared_descendants=False)
 
     :param str importer: A module name.
     :param str imported: A module name.
     :param bool as_packages: Whether or not to treat the supplied modules as individual modules, or as entire
         packages (including any descendants).
+    :param bool exclude_shared_descendants: Only applies if ``as_packages`` is True. By default, a ``ValueError`` is raised
+         if the modules have shared descendants (i.e. one is a package that contains the other). If True, the shared
+         descendants are instead excluded from the outer package, so imports are checked between the inner package and
+         the rest of the outer package. Defaults to False.
     :return: Whether or not the importer directly imports the imported module.
     :rtype: ``True`` or ``False``.
 
@@ -260,7 +264,7 @@ Methods for analysing import chains
     :return: All the modules that are imported (even indirectly) by the supplied module.
     :rtype: A set of strings.
 
-.. py:function:: ImportGraph.find_shortest_chain(importer, imported, as_packages=False)
+.. py:function:: ImportGraph.find_shortest_chain(importer, imported, as_packages=False, exclude_shared_descendants=False)
 
     :param str importer: The module at the start of a potential chain of imports between ``importer`` and ``imported``
         (i.e. the module that potentially imports ``imported``, even indirectly).
@@ -269,22 +273,30 @@ Methods for analysing import chains
          or as packages (including any descendants, if there are any). If
          treating them as packages, all descendants of ``importer`` and
          ``imported`` will be checked too.
+    :param bool exclude_shared_descendants: Only applies if ``as_packages`` is True. By default, a ``ValueError`` is raised
+         if the modules have shared descendants (i.e. one is a package that contains the other). If True, the shared
+         descendants are instead excluded from the outer package, so chains are searched between the inner package and
+         the rest of the outer package. Defaults to False.
     :return: The shortest chain of imports between the supplied modules, or None if no chain exists.
     :rtype: A tuple of strings, ordered from importer to imported modules, or None.
 
-.. py:function:: ImportGraph.find_shortest_chains(importer, imported, as_packages=True)
+.. py:function:: ImportGraph.find_shortest_chains(importer, imported, as_packages=True, exclude_shared_descendants=False)
 
     :param str importer: A module or subpackage within the graph.
     :param str imported: Another module or subpackage within the graph.
     :param bool as_packages: Whether or not to treat the imported and importer as an individual module,
                             or as a package (including any descendants, if there are any). If treating them as packages, all descendants
                             of ``importer`` and ``imported`` will be checked too. Defaults to True.
+    :param bool exclude_shared_descendants: Only applies if ``as_packages`` is True. By default, a ``ValueError`` is raised
+         if the modules have shared descendants (i.e. one is a package that contains the other). If True, the shared
+         descendants are instead excluded from the outer package, so chains are searched between the inner package and
+         the rest of the outer package. Defaults to False.
     :return: The shortest import chains that exist between the ``importer`` and ``imported``, and between any modules
              contained within them. Only one chain per upstream/downstream pair will be included. Any chains that are
              contained within other chains in the result set will be excluded.
     :rtype: A set of tuples of strings. Each tuple is ordered from importer to imported modules.
 
-.. py:function:: ImportGraph.chain_exists(importer, imported, as_packages=False)
+.. py:function:: ImportGraph.chain_exists(importer, imported, as_packages=False, exclude_shared_descendants=False)
 
     :param str importer: The module at the start of the potential chain of imports (as in ``find_shortest_chain``).
     :param str imported: The module at the end of the potential chain of imports (as in ``find_shortest_chain``).
@@ -292,6 +304,10 @@ Methods for analysing import chains
          or as packages (including any descendants, if there are any). If
          treating them as packages, all descendants of ``importer`` and
          ``imported`` will be checked too.
+    :param bool exclude_shared_descendants: Only applies if ``as_packages`` is True. By default, a ``ValueError`` is raised
+         if the modules have shared descendants (i.e. one is a package that contains the other). If True, the shared
+         descendants are instead excluded from the outer package, so chains are searched between the inner package and
+         the rest of the outer package. Defaults to False.
     :return:  Return whether any chain of imports exists between ``importer`` and ``imported``,
         even indirectly; in other words, does ``importer`` depend on ``imported``?
     :rtype: bool

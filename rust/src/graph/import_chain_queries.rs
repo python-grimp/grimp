@@ -37,22 +37,20 @@ impl Graph {
         importer: ModuleToken,
         imported: ModuleToken,
         as_packages: bool,
+        exclude_shared_descendants: bool,
     ) -> GrimpResult<Option<Vec<ModuleToken>>> {
-        if as_packages {
-            self.find_shortest_chain_with_excluded_modules_and_imports(
-                &importer.conv::<FxHashSet<_>>().with_descendants(self),
-                &imported.conv::<FxHashSet<_>>().with_descendants(self),
-                &FxHashSet::default(),
-                &FxHashMap::default(),
-            )
-        } else {
-            self.find_shortest_chain_with_excluded_modules_and_imports(
-                &importer.conv::<FxHashSet<_>>(),
-                &imported.conv::<FxHashSet<_>>(),
-                &FxHashSet::default(),
-                &FxHashMap::default(),
-            )
-        }
+        let (from_modules, to_modules) = self.get_importer_and_imported_modules(
+            importer,
+            imported,
+            as_packages,
+            exclude_shared_descendants,
+        )?;
+        self.find_shortest_chain_with_excluded_modules_and_imports(
+            &from_modules,
+            &to_modules,
+            &FxHashSet::default(),
+            &FxHashMap::default(),
+        )
     }
 
     pub(crate) fn find_shortest_chain_with_excluded_modules_and_imports(
@@ -76,9 +74,10 @@ impl Graph {
         importer: ModuleToken,
         imported: ModuleToken,
         as_packages: bool,
+        exclude_shared_descendants: bool,
     ) -> GrimpResult<bool> {
         Ok(self
-            .find_shortest_chain(importer, imported, as_packages)?
+            .find_shortest_chain(importer, imported, as_packages, exclude_shared_descendants)?
             .is_some())
     }
 
@@ -87,19 +86,20 @@ impl Graph {
         importer: ModuleToken,
         imported: ModuleToken,
         as_packages: bool,
+        exclude_shared_descendants: bool,
     ) -> GrimpResult<FxHashSet<Vec<ModuleToken>>> {
         // Shortcut the detailed implementation in the case of no chains.
         // This will be much faster!
-        if !self.chain_exists(importer, imported, as_packages)? {
+        if !self.chain_exists(importer, imported, as_packages, exclude_shared_descendants)? {
             return Ok(FxHashSet::default());
         }
 
-        let mut downstream_modules = FxHashSet::from_iter([importer]);
-        let mut upstream_modules = FxHashSet::from_iter([imported]);
-        if as_packages {
-            downstream_modules.extend_with_descendants(self);
-            upstream_modules.extend_with_descendants(self);
-        }
+        let (downstream_modules, upstream_modules) = self.get_importer_and_imported_modules(
+            importer,
+            imported,
+            as_packages,
+            exclude_shared_descendants,
+        )?;
 
         let chains = self
             ._find_shortest_chains(

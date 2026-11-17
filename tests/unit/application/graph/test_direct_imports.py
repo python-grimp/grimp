@@ -203,6 +203,55 @@ def test_direct_import_exists(importer, imported, as_packages, expected_result):
         )
 
 
+class TestDirectImportExistsExcludeSharedDescendants:
+    @staticmethod
+    def _build_graph() -> ImportGraph:
+        graph = ImportGraph()
+        for module in ("pkg", "pkg.inner", "pkg.inner.leaf", "pkg.other"):
+            graph.add_module(module)
+        graph.add_import(importer="pkg.other", imported="pkg.inner.leaf")
+        graph.add_import(importer="pkg.inner", imported="pkg.inner.leaf")  # Within the overlap.
+        return graph
+
+    @pytest.mark.parametrize(
+        "importer, imported, expected_result",
+        (
+            # Outer package importing the inner package: pkg.other -> pkg.inner.leaf.
+            ("pkg", "pkg.inner", True),
+            # Inner package importing the outer package: the only imports are in the other
+            # direction, or within the overlap.
+            ("pkg.inner", "pkg", False),
+        ),
+    )
+    def test_overlapping_packages(self, importer: str, imported: str, expected_result: bool):
+        graph = self._build_graph()
+
+        result = graph.direct_import_exists(
+            importer=importer,
+            imported=imported,
+            as_packages=True,
+            exclude_shared_descendants=True,
+        )
+
+        assert result is expected_result
+
+    def test_raises_by_default(self):
+        graph = self._build_graph()
+
+        with pytest.raises(ValueError, match=re.escape("Modules have shared descendants.")):
+            graph.direct_import_exists(importer="pkg", imported="pkg.inner", as_packages=True)
+
+    def test_no_effect_if_not_as_packages(self):
+        graph = self._build_graph()
+
+        assert graph.direct_import_exists(
+            importer="pkg.inner",
+            imported="pkg.inner.leaf",
+            as_packages=False,
+            exclude_shared_descendants=True,
+        )
+
+
 class TestCountImports:
     @pytest.mark.parametrize(
         "imports, expected_count",
