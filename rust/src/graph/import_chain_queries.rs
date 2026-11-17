@@ -38,21 +38,14 @@ impl Graph {
         imported: ModuleToken,
         as_packages: bool,
     ) -> GrimpResult<Option<Vec<ModuleToken>>> {
-        if as_packages {
-            self.find_shortest_chain_with_excluded_modules_and_imports(
-                &importer.conv::<FxHashSet<_>>().with_descendants(self),
-                &imported.conv::<FxHashSet<_>>().with_descendants(self),
-                &FxHashSet::default(),
-                &FxHashMap::default(),
-            )
-        } else {
-            self.find_shortest_chain_with_excluded_modules_and_imports(
-                &importer.conv::<FxHashSet<_>>(),
-                &imported.conv::<FxHashSet<_>>(),
-                &FxHashSet::default(),
-                &FxHashMap::default(),
-            )
-        }
+        let (from_modules, to_modules) =
+            self.get_importer_and_imported_modules(importer, imported, as_packages)?;
+        self.find_shortest_chain_with_excluded_modules_and_imports(
+            &from_modules,
+            &to_modules,
+            &FxHashSet::default(),
+            &FxHashMap::default(),
+        )
     }
 
     pub(crate) fn find_shortest_chain_with_excluded_modules_and_imports(
@@ -94,12 +87,8 @@ impl Graph {
             return Ok(FxHashSet::default());
         }
 
-        let mut downstream_modules = FxHashSet::from_iter([importer]);
-        let mut upstream_modules = FxHashSet::from_iter([imported]);
-        if as_packages {
-            downstream_modules.extend_with_descendants(self);
-            upstream_modules.extend_with_descendants(self);
-        }
+        let (downstream_modules, upstream_modules) =
+            self.get_importer_and_imported_modules(importer, imported, as_packages)?;
 
         let chains = self
             ._find_shortest_chains(

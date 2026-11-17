@@ -1,4 +1,7 @@
-use crate::graph::{Graph, MODULE_NAMES, Module, ModuleIterator, ModuleToken};
+use crate::errors::{GrimpError, GrimpResult};
+use crate::graph::{
+    ExtendWithDescendants, Graph, MODULE_NAMES, Module, ModuleIterator, ModuleToken,
+};
 use crate::module_expressions::ModuleExpression;
 use rustc_hash::FxHashSet;
 
@@ -37,6 +40,29 @@ impl Graph {
             None => Vec::new(),
         };
         children.into_iter()
+    }
+
+    /// Return the sets of modules to search between, for an importer and an imported module.
+    ///
+    /// If `as_packages` is true, each set includes the descendants of the module. In that case, it
+    /// is an error if the sets have modules in common (i.e. one module is a descendant of the
+    /// other, or they are the same module).
+    pub fn get_importer_and_imported_modules(
+        &self,
+        importer: ModuleToken,
+        imported: ModuleToken,
+        as_packages: bool,
+    ) -> GrimpResult<(FxHashSet<ModuleToken>, FxHashSet<ModuleToken>)> {
+        let mut importers = FxHashSet::from_iter([importer]);
+        let mut importeds = FxHashSet::from_iter([imported]);
+        if as_packages {
+            importers.extend_with_descendants(self);
+            importeds.extend_with_descendants(self);
+            if !importers.is_disjoint(&importeds) {
+                return Err(GrimpError::SharedDescendants);
+            }
+        }
+        Ok((importers, importeds))
     }
 
     /// Returns an iterator over the passed modules descendants.

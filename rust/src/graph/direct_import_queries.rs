@@ -1,4 +1,4 @@
-use crate::errors::{GrimpError, GrimpResult};
+use crate::errors::GrimpResult;
 use crate::graph::{
     EMPTY_IMPORT_DETAILS, EMPTY_MODULE_TOKENS, ExtendWithDescendants, Graph, ModuleIterator,
     ModuleToken, PyImportDetails,
@@ -17,15 +17,8 @@ impl Graph {
         imported: ModuleToken,
         as_packages: bool,
     ) -> GrimpResult<bool> {
-        let mut importers: FxHashSet<_> = importer.into();
-        let mut importeds: FxHashSet<_> = imported.into();
-        if as_packages {
-            importers.extend_with_descendants(self);
-            importeds.extend_with_descendants(self);
-            if !(&importers & &importeds).is_empty() {
-                return Err(GrimpError::SharedDescendants);
-            }
-        }
+        let (importers, importeds) =
+            self.get_importer_and_imported_modules(importer, imported, as_packages)?;
 
         let direct_imports = importers
             .iter()
@@ -43,15 +36,8 @@ impl Graph {
     ) -> GrimpResult<FxHashSet<(ModuleToken, ModuleToken)>> {
         let mut all_imports: FxHashSet<(ModuleToken, ModuleToken)> = FxHashSet::default();
 
-        let mut importers: FxHashSet<_> = importer.into();
-        let mut importeds: FxHashSet<_> = imported.into();
-        if as_packages {
-            importers.extend_with_descendants(self);
-            importeds.extend_with_descendants(self);
-            if !(&importers & &importeds).is_empty() {
-                return Err(GrimpError::SharedDescendants);
-            }
-        }
+        let (importers, importeds) =
+            self.get_importer_and_imported_modules(importer, imported, as_packages)?;
 
         for importer_module in importers.iter() {
             if let Some(all_imports_imported_by_this_one) = self.imports.get(*importer_module) {
