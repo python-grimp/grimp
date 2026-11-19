@@ -8,6 +8,8 @@ import itertools
 from collections.abc import Iterable, Sequence
 from typing import cast
 
+from grimp import _rustgrimp as rust  # type: ignore[attr-defined]
+
 from ..application.graph import ImportGraph
 from ..application.ports import caching
 from ..application.ports.filesystem import AbstractFileSystem, BasicFileSystem
@@ -69,6 +71,40 @@ def build_graph(
     graph = _assemble_graph(found_packages, imports_by_module)
 
     return graph
+
+
+def build_graph_rust(
+    package_name: str,
+    *additional_package_names: str,
+    include_external_packages: bool = False,
+    exclude_type_checking_imports: bool = False,
+    cache_dir: str | type[NotSupplied] | None = NotSupplied,
+) -> ImportGraph:
+    """
+    Build and return an import graph for the supplied package name(s), using Rust throughout.
+
+    This takes the same arguments as, and is intended as a faster drop-in replacement for,
+    ``build_graph``. It shares its cache with ``build_graph``.
+    """
+    package_names = _validate_package_names_are_strings([package_name, *additional_package_names])
+    packages = [
+        (name, directory)
+        for name in package_names
+        for directory in settings.PACKAGE_FINDER.determine_package_directories(
+            package_name=name, file_system=settings.FILE_SYSTEM
+        )
+    ]
+    if cache_dir is NotSupplied:
+        cache_dir = settings.CACHE_CLASS.cache_dir_or_default(None)
+
+    rust_graph = rust.build_graph(
+        packages,
+        # Tolerate a non-boolean (Import Linter has been known to pass None).
+        include_external_packages=bool(include_external_packages),
+        exclude_type_checking_imports=exclude_type_checking_imports,
+        cache_dir=cache_dir,
+    )
+    return ImportGraph.from_rustgraph(rust_graph)
 
 
 def _find_packages(

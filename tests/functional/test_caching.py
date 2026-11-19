@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from grimp import build_graph
+import grimp
 
 """
 For ease of reference, these are the imports of all the files:
@@ -43,7 +43,7 @@ def copied_cachingpackage():
     shutil.rmtree(str(PACKAGE_COPY_DESTINATION))
 
 
-def test_build_graph_uses_cache(copied_cachingpackage):
+def test_build_graph_uses_cache(build_graph, copied_cachingpackage):
     with tempfile.TemporaryDirectory() as cache_dir:
         graph = build_graph("cachingpackage", cache_dir=cache_dir)
 
@@ -110,7 +110,7 @@ def test_build_graph_uses_cache(copied_cachingpackage):
         )
 
 
-def test_cache_preserves_is_lazy():
+def test_cache_preserves_is_lazy(build_graph):
     with tempfile.TemporaryDirectory() as cache_dir:
         # First build populates the cache from source.
         build_graph("lazyimports", cache_dir=cache_dir)
@@ -131,7 +131,7 @@ def test_cache_preserves_is_lazy():
         ]
 
 
-def test_data_file_records_version_and_is_lazy(copied_cachingpackage):
+def test_data_file_records_version_and_is_lazy(build_graph, copied_cachingpackage):
     with tempfile.TemporaryDirectory() as cache_dir:
         build_graph("cachingpackage", cache_dir=cache_dir)
 
@@ -146,7 +146,7 @@ def test_data_file_records_version_and_is_lazy(copied_cachingpackage):
         ]
 
 
-def test_cache_with_different_version_is_rebuilt(copied_cachingpackage, caplog):
+def test_cache_with_different_version_is_rebuilt(build_graph, copied_cachingpackage, caplog):
     with tempfile.TemporaryDirectory() as cache_dir:
         build_graph("cachingpackage", cache_dir=cache_dir)
 
@@ -163,7 +163,8 @@ def test_cache_with_different_version_is_rebuilt(copied_cachingpackage, caplog):
             graph = build_graph("cachingpackage", cache_dir=cache_dir)
 
         # The mismatched cache is ignored (not treated as corrupt) and rebuilt from source.
-        assert any("different version of Grimp" in record.message for record in caplog.records)
+        if build_graph is grimp.build_graph:  # Only the Python implementation logs.
+            assert any("different version of Grimp" in record.message for record in caplog.records)
         assert graph.get_import_details(
             importer="cachingpackage.two.alpha",
             imported="cachingpackage.one.alpha",
@@ -176,6 +177,32 @@ def test_cache_with_different_version_is_rebuilt(copied_cachingpackage, caplog):
                 "line_number": 1,
             }
         ]
+
+
+@pytest.mark.parametrize(
+    "build_graph_writing_cache, build_graph_reading_cache",
+    (
+        (grimp.build_graph, grimp.build_graph_rust),
+        (grimp.build_graph_rust, grimp.build_graph),
+    ),
+)
+def test_cache_is_shared_between_implementations(
+    copied_cachingpackage, build_graph_writing_cache, build_graph_reading_cache
+):
+    with tempfile.TemporaryDirectory() as cache_dir:
+        build_graph_writing_cache("cachingpackage", cache_dir=cache_dir)
+
+        data_file = Path(cache_dir) / "27aa562ad2a4745eb20ecf156430dbfeb0e90610.data.json"
+        snippet = "from ..one import alpha"
+        replacement = snippet + "  # Inserted by test"
+        _manipulate_data_file(data_file, snippet, replacement)
+
+        graph = build_graph_reading_cache("cachingpackage", cache_dir=cache_dir)
+
+        [import_details] = graph.get_import_details(
+            importer="cachingpackage.two.alpha", imported="cachingpackage.one.alpha"
+        )
+        assert import_details["line_contents"] == replacement
 
 
 def _manipulate_data_file(data_file: Path, snippet: str, replacement: str) -> None:
