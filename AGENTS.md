@@ -2,7 +2,7 @@
 
 Grimp builds a queryable graph of the imports within one or more Python packages. It's a
 hybrid Python/Rust project: the public API and orchestration are in Python
-(`src/grimp/`), and the import scanning and graph algorithms are implemented in Rust
+(`src/grimp/`), and the graph building and graph algorithms are implemented in Rust
 (`rust/`) as a PyO3 extension module (`grimp._rustgrimp`), built with maturin.
 
 ## Architecture
@@ -11,18 +11,18 @@ hybrid Python/Rust project: the public API and orchestration are in Python
 (see `.importlinter`):
 
 - `domain/` — core types (`valueobjects.py`, `analysis.py`), no dependencies on other layers.
-- `application/` — use cases and ports (`usecases.py`, `graph.py`, `scanning.py`, `config.py`).
-- `adaptors/` — implementations of application ports (filesystem, module/package finding,
-  caching, timing).
+- `application/` — use cases and ports (`usecases.py`, `graph.py`, `config.py`).
+- `adaptors/` — implementations of application ports (package finding).
 - `main.py` — top-level entry point (`grimp.build_graph`), wires adaptors to use cases.
 - `exceptions.py` — shared exceptions, importable from any layer.
 
 Respect this layering: `domain` must not import from `application` or `adaptors`, etc. Run
 `just lint-python` (which includes `lint-imports`) to check.
 
-The Rust side (`rust/src/`) does the heavy lifting: import parsing (via `ruff`'s parser),
-module/import scanning, and graph algorithms (`rust/src/graph/`: pathfinding, cycle
-detection, hierarchy queries, etc.).
+The Rust side (`rust/src/`) does the heavy lifting. `grimp.build_graph` calls into
+`rust/src/graph_building.rs`, which finds the modules, reads and writes the cache, scans the
+imports (parsed via `ruff`'s parser) and assembles the graph. It also implements the graph
+algorithms (`rust/src/graph/`: pathfinding, cycle detection, hierarchy queries, etc.).
 
 ## Setup
 

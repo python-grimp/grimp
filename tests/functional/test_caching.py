@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -186,3 +187,387 @@ def _manipulate_data_file(data_file: Path, snippet: str, replacement: str) -> No
 
     with open(data_file, "w") as file:
         file.write(filedata)
+
+
+# Tests of the cache's behaviour, using real files.
+# ---------------------------------------------------
+
+MYPACKAGE_FILES = {
+    "mypackage/__init__.py": "",
+    "mypackage/one.py": "from . import two",
+    "mypackage/two.py": "from . import three",
+    "mypackage/three.py": "",
+}
+ANOTHERPACKAGE_FILES = {
+    "anotherpackage/__init__.py": "",
+    "anotherpackage/one.py": "import externalpackage\nfrom . import two",
+    "anotherpackage/two.py": "",
+}
+MARKER = "  # Inserted by test"
+
+
+@pytest.fixture
+def cache_dir(tmp_path):
+    return tmp_path / "cache"
+
+
+def _data_file(cache_dir: Path) -> Path:
+    [data_file] = cache_dir.glob("*.data.json")
+    return data_file
+
+
+def _insert_marker_in_cache(cache_dir: Path) -> None:
+    """
+    Alter the cached line contents of "from . import two", so we can tell if the cache was used.
+    """
+    _manipulate_data_file(_data_file(cache_dir), "from . import two", "from . import two" + MARKER)
+
+
+def _line_contents(graph, importer: str, imported: str) -> str:
+    [import_details] = graph.get_import_details(importer=importer, imported=imported)
+    return import_details["line_contents"]
+
+
+class TestCacheFiles:
+    @pytest.mark.parametrize(
+        "include_external_packages, exclude_type_checking_imports, expected_data_file_name",
+        (
+            # Blake2B 20-character hash of "bluepackage,greenpackage".
+            (False, False, "3d0968b3c17583a69a90610a871276fe2110c6f4.data.json"),
+            # Blake2B 20-character hash of "bluepackage,greenpackage:external".
+            (True, False, "ff83c6ee50a447a433a0c7a345d09de4b0d82a69.data.json"),
+            # Blake2B 20-character hash of "bluepackage,greenpackage:no_type_checking".
+            (False, True, "5e8b57eaed0aabd7826b5b0cc6cb2b7db8c82fb8.data.json"),
+            # Blake2B 20-character hash of "bluepackage,greenpackage:external:no_type_checking".
+            (True, True, "91f51d0e59ed9e09cfc3e8a94c9249c4c3ab7184.data.json"),
+        ),
+    )
+    @pytest.mark.parametrize(
+        "package_names", (("bluepackage", "greenpackage"), ("greenpackage", "bluepackage"))
+    )
+    def test_file_names(
+        self,
+        write_files,
+        cache_dir,
+        package_names,
+        include_external_packages,
+        exclude_type_checking_imports,
+        expected_data_file_name,
+    ):
+        write_files(
+            {
+                "bluepackage/__init__.py": "",
+                "greenpackage/__init__.py": "",
+            }
+        )
+
+        build_graph(
+            *package_names,
+            include_external_packages=include_external_packages,
+            exclude_type_checking_imports=exclude_type_checking_imports,
+            cache_dir=str(cache_dir),
+        )
+
+        # There's a meta file per package, and a data file that depends on the packages
+        # (but not the order they were passed in) and options.
+        assert {path.name for path in cache_dir.iterdir()} == {
+            ".gitignore",
+            "CACHEDIR.TAG",
+            "bluepackage.meta.json",
+            "greenpackage.meta.json",
+            expected_data_file_name,
+        }
+
+    @pytest.mark.parametrize("cache_dir_suffix", ("", "/"))
+    @pytest.mark.parametrize(
+        "include_external_packages, expected_data_file_name",
+        (
+            (False, "3d0968b3c17583a69a90610a871276fe2110c6f4.data.json"),
+            (True, "ff83c6ee50a447a433a0c7a345d09de4b0d82a69.data.json"),
+        ),
+    )
+    def test_contents(
+        self,
+        write_files,
+        cache_dir,
+        cache_dir_suffix,
+        include_external_packages,
+        expected_data_file_name,
+    ):
+        root = write_files(
+            {
+                "bluepackage/__init__.py": "",
+                "bluepackage/one.py": "from . import two\nimport externalpackage",
+                "bluepackage/two.py": "",
+                "greenpackage/__init__.py": "",
+                "greenpackage/one.py": "",
+                "greenpackage/two.py": "from . import one",
+            }
+        )
+
+        build_graph(
+            "bluepackage",
+            "greenpackage",
+            include_external_packages=include_external_packages,
+            cache_dir=f"{cache_dir}{cache_dir_suffix}",
+        )
+
+        # The meta files contain the mtime of each module.
+        for package, module_files in (
+            (
+                "bluepackage",
+                {"bluepackage": "__init__", "bluepackage.one": "one", "bluepackage.two": "two"},
+            ),
+            (
+                "greenpackage",
+                {"greenpackage": "__init__", "greenpackage.one": "one", "greenpackage.two": "two"},
+            ),
+        ):
+            assert json.loads((cache_dir / f"{package}.meta.json").read_text()) == {
+                module: os.path.getmtime(root / package / f"{file_stem}.py")
+                for module, file_stem in module_files.items()
+            }
+
+        # The data file contains the imports of each module.
+        expected_blue_one_imports = {("bluepackage.two", False, 1, "from . import two")}
+        if include_external_packages:
+            expected_blue_one_imports.add(("externalpackage", False, 2, "import externalpackage"))
+        data = json.loads((cache_dir / expected_data_file_name).read_text())
+        assert data["version"] == 2
+        assert {
+            module: {tuple(imported) for imported in imports}
+            for module, imports in data["imports_by_module"].items()
+        } == {
+            "bluepackage": set(),
+            "bluepackage.one": expected_blue_one_imports,
+            "bluepackage.two": set(),
+            "greenpackage": set(),
+            "greenpackage.one": set(),
+            "greenpackage.two": {("greenpackage.one", False, 1, "from . import one")},
+        }
+
+    def test_default_cache_dir(self, write_files, tmp_path, monkeypatch):
+        write_files({"bluepackage/__init__.py": ""})
+        monkeypatch.chdir(tmp_path)
+
+        build_graph("bluepackage")
+
+        assert (tmp_path / ".grimp_cache" / "bluepackage.meta.json").exists()
+
+    def test_adds_marker_files(self, write_files, cache_dir):
+        write_files({"bluepackage/__init__.py": ""})
+
+        build_graph("bluepackage", cache_dir=str(cache_dir))
+
+        assert (cache_dir / ".gitignore").read_text() == "# Automatically created by Grimp.\n*"
+        assert (cache_dir / "CACHEDIR.TAG").read_text() == (
+            "Signature: 8a477f597d28d172789f06886806bc55\n"
+            "# This file is a cache directory tag automatically created by Grimp.\n"
+            "# For information about cache directory tags see https://bford.info/cachedir/"
+        )
+
+    def test_doesnt_overwrite_marker_files(self, write_files, cache_dir):
+        write_files({"bluepackage/__init__.py": ""})
+        cache_dir.mkdir()
+        (cache_dir / ".gitignore").write_text("Something else")
+
+        build_graph("bluepackage", cache_dir=str(cache_dir))
+
+        assert (cache_dir / ".gitignore").read_text() == "Something else"
+
+
+class TestCacheUse:
+    def test_uses_cache_for_unmodified_module(self, write_files, cache_dir):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        _insert_marker_in_cache(cache_dir)
+
+        graph = build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert _line_contents(graph, "mypackage.one", "mypackage.two") == (
+            "from . import two" + MARKER
+        )
+
+    def test_ignores_cache_for_module_with_different_mtime(self, write_files, cache_dir):
+        root = write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        _insert_marker_in_cache(cache_dir)
+        path = root / "mypackage" / "one.py"
+        os.utime(path, (path.stat().st_atime, path.stat().st_mtime + 100))
+
+        graph = build_graph("mypackage", cache_dir=str(cache_dir))
+
+        # The modified module isn't read from the cache, but the others are.
+        assert _line_contents(graph, "mypackage.one", "mypackage.two") == "from . import two"
+        assert _line_contents(graph, "mypackage.two", "mypackage.three") == "from . import three"
+
+    def test_ignores_cache_for_new_module(self, write_files, cache_dir):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        write_files({"mypackage/four.py": "from . import one"})
+
+        graph = build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert graph.direct_import_exists(importer="mypackage.four", imported="mypackage.one")
+
+    def test_ignores_cache_for_module_with_no_cached_mtime(self, write_files, cache_dir):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        _insert_marker_in_cache(cache_dir)
+        meta_file = cache_dir / "mypackage.meta.json"
+        mtimes = json.loads(meta_file.read_text())
+        del mtimes["mypackage.one"]
+        meta_file.write_text(json.dumps(mtimes))
+
+        graph = build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert _line_contents(graph, "mypackage.one", "mypackage.two") == "from . import two"
+
+    def test_ignores_cache_for_module_missing_from_data(self, write_files, cache_dir):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        data_file = _data_file(cache_dir)
+        data = json.loads(data_file.read_text())
+        del data["imports_by_module"]["mypackage.one"]
+        data_file.write_text(json.dumps(data))
+
+        graph = build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert graph.direct_import_exists(importer="mypackage.one", imported="mypackage.two")
+
+    @pytest.mark.parametrize(
+        "serialized_meta",
+        (
+            "INVALID_JSON",
+            '{"mypackage.one": ["wrong", "type"]}',
+        ),
+    )
+    def test_ignores_corrupt_meta_file(self, write_files, cache_dir, serialized_meta):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        _insert_marker_in_cache(cache_dir)
+        (cache_dir / "mypackage.meta.json").write_text(serialized_meta)
+
+        graph = build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert _line_contents(graph, "mypackage.one", "mypackage.two") == "from . import two"
+
+    @pytest.mark.parametrize(
+        "serialized_data",
+        (
+            "INVALID_JSON",
+            '{"version": 2, "imports_by_module": {"mypackage.one": [["wrong", "type"]]}}',
+        ),
+    )
+    def test_ignores_corrupt_data_file(self, write_files, cache_dir, serialized_data):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        _data_file(cache_dir).write_text(serialized_data)
+
+        graph = build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert _line_contents(graph, "mypackage.one", "mypackage.two") == "from . import two"
+        # The cache is repaired.
+        data = json.loads(_data_file(cache_dir).read_text())
+        assert data["imports_by_module"]["mypackage.one"] == [
+            ["mypackage.two", False, 1, "from . import two"]
+        ]
+
+    @pytest.mark.parametrize(
+        "package_names, options",
+        (
+            (("mypackage", "anotherpackage"), {}),
+            (("mypackage",), {"include_external_packages": True}),
+            (("mypackage",), {"exclude_type_checking_imports": True}),
+        ),
+    )
+    def test_doesnt_use_cache_for_different_packages_or_options(
+        self, write_files, cache_dir, package_names, options
+    ):
+        write_files(MYPACKAGE_FILES | ANOTHERPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        _insert_marker_in_cache(cache_dir)
+
+        graph = build_graph(*package_names, cache_dir=str(cache_dir), **options)
+
+        assert _line_contents(graph, "mypackage.one", "mypackage.two") == "from . import two"
+
+    @pytest.mark.parametrize("include_external_packages", (False, True))
+    def test_uses_cache_for_multiple_packages(
+        self, write_files, cache_dir, include_external_packages
+    ):
+        write_files(MYPACKAGE_FILES | ANOTHERPACKAGE_FILES)
+        kwargs = dict(
+            include_external_packages=include_external_packages, cache_dir=str(cache_dir)
+        )
+        build_graph("mypackage", "anotherpackage", **kwargs)
+        _insert_marker_in_cache(cache_dir)
+
+        graph = build_graph("mypackage", "anotherpackage", **kwargs)
+
+        expected_line_contents = "from . import two" + MARKER
+        assert _line_contents(graph, "mypackage.one", "mypackage.two") == expected_line_contents
+        assert (
+            _line_contents(graph, "anotherpackage.one", "anotherpackage.two")
+            == expected_line_contents
+        )
+        expected_imports = {"anotherpackage.two"}
+        if include_external_packages:
+            expected_imports.add("externalpackage")
+        assert graph.find_modules_directly_imported_by("anotherpackage.one") == expected_imports
+
+
+class TestCacheLogging:
+    @pytest.fixture(autouse=True)
+    def set_log_level(self, caplog):
+        caplog.set_level(logging.INFO, logger="grimp.adaptors.caching")
+
+    def test_logs_missing_cache_files(self, write_files, cache_dir, caplog):
+        write_files(MYPACKAGE_FILES)
+
+        build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert caplog.messages == [
+            f"No cache file: {cache_dir / 'mypackage.meta.json'}.",
+            f"No cache file: {_data_file(cache_dir)}.",
+            f"Wrote data cache file {_data_file(cache_dir)}.",
+            f"Wrote meta cache file {cache_dir / 'mypackage.meta.json'}.",
+        ]
+
+    def test_logs_successful_cache_file_reading(self, write_files, cache_dir, caplog):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        caplog.clear()
+
+        build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert caplog.messages == [
+            f"Used cache meta file {cache_dir / 'mypackage.meta.json'}.",
+            f"Used cache data file {_data_file(cache_dir)}.",
+            f"Wrote data cache file {_data_file(cache_dir)}.",
+            f"Wrote meta cache file {cache_dir / 'mypackage.meta.json'}.",
+        ]
+
+    def test_logs_corrupt_cache_meta_file(self, write_files, cache_dir, caplog):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        (cache_dir / "mypackage.meta.json").write_text("INVALID_JSON")
+        caplog.clear()
+        caplog.set_level(logging.WARNING, logger="grimp.adaptors.caching")
+
+        build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert caplog.messages == [
+            f"Could not use corrupt cache file {cache_dir / 'mypackage.meta.json'}.",
+        ]
+
+    def test_logs_corrupt_cache_data_file(self, write_files, cache_dir, caplog):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        _data_file(cache_dir).write_text("INVALID_JSON")
+        caplog.clear()
+        caplog.set_level(logging.WARNING, logger="grimp.adaptors.caching")
+
+        build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert caplog.messages == [f"Could not use corrupt cache file {_data_file(cache_dir)}."]

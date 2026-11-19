@@ -1,79 +1,13 @@
 use crate::errors::{GrimpError, GrimpResult};
-use crate::filesystem::get_file_system_boxed;
-use crate::import_scanning::{DirectImport, imports_by_module_to_py};
-use crate::module_finding::Module;
-use pyo3::types::PyAnyMethods;
-use pyo3::types::{PyDict, PySet};
-use pyo3::types::{PyDictMethods, PySetMethods};
-use pyo3::{Borrowed, Bound, FromPyObject, PyAny, PyErr, PyResult, Python, pyfunction};
+use crate::filesystem::FileSystem;
+use crate::import_scanning::DirectImport;
+use crate::log_records::LogRecord;
+use crate::module_finding::{FoundPackage, Module};
+use blake2::Blake2bVar;
+use blake2::digest::{Update, VariableOutput};
 use std::collections::{HashMap, HashSet};
 
-/// Writes the cache file containing all the imports for a given package.
-/// Args:
-/// - filename: str
-/// - imports_by_module: dict[Module, Set[DirectImport]]
-/// - file_system: The file system interface to use. (A BasicFileSystem.)
-#[pyfunction]
-pub fn write_cache_data_map_file<'py>(
-    filename: &str,
-    imports_by_module: Bound<'py, PyDict>,
-    file_system: Bound<'py, PyAny>,
-) -> PyResult<()> {
-    let mut file_system_boxed = get_file_system_boxed(&file_system)?;
-
-    let ImportsByModule(imports_by_module_rust) = imports_by_module.extract()?;
-
-    let file_contents = serialize_imports_by_module(&imports_by_module_rust);
-
-    file_system_boxed.write(filename, &file_contents)?;
-
-    Ok(())
-}
-
-/// Reads the cache file containing all the imports for a given package.
-/// Args:
-/// - filename: str
-/// - file_system: The file system interface to use. (A BasicFileSystem.)
-/// Returns Dict[Module, Set[DirectImport]]
-#[pyfunction]
-pub fn read_cache_data_map_file<'py>(
-    py: Python<'py>,
-    filename: &str,
-    file_system: Bound<'py, PyAny>,
-) -> PyResult<Bound<'py, PyDict>> {
-    let file_system_boxed = get_file_system_boxed(&file_system)?;
-
-    let file_contents = file_system_boxed.read(filename)?;
-
-    let imports_by_module = parse_json_to_map(&file_contents, filename)?;
-
-    Ok(imports_by_module_to_py(py, imports_by_module))
-}
-
-/// A newtype wrapper for HashMap<Module, HashSet<DirectImport>> that implements FromPyObject.
-pub struct ImportsByModule(pub HashMap<Module, HashSet<DirectImport>>);
-
-impl<'a, 'py> FromPyObject<'a, 'py> for ImportsByModule {
-    type Error = PyErr;
-
-    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
-        let py_dict = ob.cast::<PyDict>()?;
-        let mut imports_by_module_rust = HashMap::new();
-
-        for (py_key, py_value) in py_dict.iter() {
-            let module: Module = py_key.extract()?;
-            let py_set = py_value.cast::<PySet>()?;
-            let mut hashset: HashSet<DirectImport> = HashSet::new();
-            for element in py_set.iter() {
-                let direct_import: DirectImport = element.extract()?;
-                hashset.insert(direct_import);
-            }
-            imports_by_module_rust.insert(module, hashset);
-        }
-
-        Ok(ImportsByModule(imports_by_module_rust))
-    }
-}
+const LOGGER: &str = "grimp.adaptors.caching";
 
 /// The version of the data cache file format.
 ///
@@ -113,24 +47,24 @@ fn serialize_imports_by_module(
     serde_json::to_string(&envelope).expect("Failed to serialize to JSON")
 }
 
-pub fn parse_json_to_map(
-    json_str: &str,
-    filename: &str,
-) -> GrimpResult<HashMap<Module, HashSet<DirectImport>>> {
-    // Parse into a generic value first, so we can distinguish genuinely corrupt
-    // JSON from a cache file written by a different format version (e.g. by an
-    // older Grimp). The latter should be silently rebuilt, not warned about.
-    let value: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|_| GrimpError::CorruptCache(filename.to_string()))?;
+/// Why the contents of a cache file can't be used.
+enum Unusable {
+    Corrupt,
+    /// The file was written by a different version of Grimp.
+    DifferentVersion,
+}
 
-    let version = value.get("version").and_then(|v| v.as_u64());
-    if version != Some(CACHE_SCHEMA_VERSION as u64) {
-        return Err(GrimpError::CacheVersionMismatch(filename.to_string()));
+/// Parses the contents of a data file.
+fn parse_json_to_map(json_str: &str) -> Result<HashMap<Module, HashSet<DirectImport>>, Unusable> {
+    let value: serde_json::Value = serde_json::from_str(json_str).map_err(|_| Unusable::Corrupt)?;
+
+    if value.get("version").and_then(|v| v.as_u64()) != Some(CACHE_SCHEMA_VERSION as u64) {
+        return Err(Unusable::DifferentVersion);
     }
 
     let raw_map: HashMap<String, Vec<(String, bool, usize, String)>> =
         serde_json::from_value(value.get("imports_by_module").cloned().unwrap_or_default())
-            .map_err(|_| GrimpError::CorruptCache(filename.to_string()))?;
+            .map_err(|_| Unusable::Corrupt)?;
 
     let mut parsed_map: HashMap<Module, HashSet<DirectImport>> = HashMap::new();
 
@@ -155,3 +89,183 @@ pub fn parse_json_to_map(
 
     Ok(parsed_map)
 }
+
+/// Reads and parses a cache file, logging what happened.
+///
+/// Returns None if the file can't be used.
+fn read_cache_file<T>(
+    file_system: &dyn FileSystem,
+    file: &str,
+    kind: &str,
+    parse: impl FnOnce(&str) -> Result<T, Unusable>,
+    log: &mut Vec<LogRecord>,
+) -> Option<T> {
+    let unusable = match file_system.read(file) {
+        Ok(contents) => match parse(&contents) {
+            Ok(value) => {
+                log.push(LogRecord::info(
+                    LOGGER,
+                    format!("Used cache {kind} file {file}."),
+                ));
+                return Some(value);
+            }
+            Err(unusable) => unusable,
+        },
+        Err(GrimpError::FileNotFound(_)) => {
+            log.push(LogRecord::info(LOGGER, format!("No cache file: {file}.")));
+            return None;
+        }
+        Err(_) => Unusable::Corrupt,
+    };
+    log.push(match unusable {
+        Unusable::Corrupt => {
+            LogRecord::warning(LOGGER, format!("Could not use corrupt cache file {file}."))
+        }
+        Unusable::DifferentVersion => LogRecord::info(
+            LOGGER,
+            format!("Cache file {file} was written by a different version of Grimp; rebuilding."),
+        ),
+    });
+    None
+}
+
+/// A cache of the imports of each module, for building a graph.
+///
+/// The file names and formats must not change without good reason, so that caches written by
+/// earlier versions of Grimp can still be used.
+pub struct Cache<'a> {
+    directory: &'a str,
+    found_packages: &'a HashSet<FoundPackage>,
+    data_file_name: String,
+}
+
+impl<'a> Cache<'a> {
+    pub fn new(
+        directory: &'a str,
+        found_packages: &'a HashSet<FoundPackage>,
+        include_external_packages: bool,
+        exclude_type_checking_imports: bool,
+    ) -> Self {
+        // The data file is specific to the packages and options used.
+        let mut package_names: Vec<&str> = found_packages.iter().map(|p| p.name.as_str()).collect();
+        package_names.sort();
+        let mut identifier = package_names.join(",");
+        if include_external_packages {
+            identifier += ":external";
+        }
+        if exclude_type_checking_imports {
+            identifier += ":no_type_checking";
+        }
+        // Hash the identifier to avoid filenames that are too long for the filesystem.
+        let mut hasher = Blake2bVar::new(20).unwrap();
+        hasher.update(identifier.as_bytes());
+        let mut hash = [0; 20];
+        hasher.finalize_variable(&mut hash).unwrap();
+        let hex_hash: String = hash.iter().map(|byte| format!("{byte:02x}")).collect();
+
+        Self {
+            directory,
+            found_packages,
+            data_file_name: format!("{hex_hash}.data.json"),
+        }
+    }
+
+    /// Reads the imports of the modules that haven't been modified since they were cached.
+    ///
+    /// Anything that can't be read (e.g. the cache doesn't exist yet) is treated as a cache miss.
+    ///
+    /// Args:
+    /// - mtimes: the current modification time of each module, by module name.
+    /// - log: anything to be logged is added to this.
+    pub fn read(
+        &self,
+        file_system: &dyn FileSystem,
+        mtimes: &HashMap<String, f64>,
+        log: &mut Vec<LogRecord>,
+    ) -> HashMap<Module, HashSet<DirectImport>> {
+        let mut cached_mtimes: HashMap<String, f64> = HashMap::new();
+        for found_package in self.found_packages {
+            let meta_file = self.file_path(file_system, &meta_file_name(found_package));
+            let parse = |contents: &str| {
+                serde_json::from_str::<HashMap<String, f64>>(contents)
+                    .map_err(|_| Unusable::Corrupt)
+            };
+            cached_mtimes.extend(
+                read_cache_file(file_system, &meta_file, "meta", parse, log).unwrap_or_default(),
+            );
+        }
+
+        let data_file = self.file_path(file_system, &self.data_file_name);
+        let imports_by_module =
+            read_cache_file(file_system, &data_file, "data", parse_json_to_map, log)
+                .unwrap_or_default();
+
+        imports_by_module
+            .into_iter()
+            .filter(|(module, _)| {
+                cached_mtimes
+                    .get(&module.name)
+                    .is_some_and(|cached| mtimes.get(&module.name) == Some(cached))
+            })
+            .collect()
+    }
+
+    pub fn write(
+        &self,
+        file_system: &mut dyn FileSystem,
+        mtimes: &HashMap<String, f64>,
+        imports_by_module: &HashMap<Module, HashSet<DirectImport>>,
+        log: &mut Vec<LogRecord>,
+    ) -> GrimpResult<()> {
+        for (file_name, contents) in MARKER_FILES {
+            let path = self.file_path(file_system, file_name);
+            if !file_system.exists(&path) {
+                file_system.write(&path, contents)?;
+            }
+        }
+
+        let data_file = self.file_path(file_system, &self.data_file_name);
+        file_system.write(&data_file, &serialize_imports_by_module(imports_by_module))?;
+        log.push(LogRecord::info(
+            LOGGER,
+            format!("Wrote data cache file {data_file}."),
+        ));
+
+        for found_package in self.found_packages {
+            let package_mtimes: HashMap<&str, f64> = found_package
+                .module_files
+                .iter()
+                .map(|module_file| {
+                    let name = module_file.module.name.as_str();
+                    (name, mtimes[name])
+                })
+                .collect();
+            let meta_file = self.file_path(file_system, &meta_file_name(found_package));
+            let contents = serde_json::to_string(&package_mtimes).expect("Failed to serialize");
+            file_system.write(&meta_file, &contents)?;
+            log.push(LogRecord::info(
+                LOGGER,
+                format!("Wrote meta cache file {meta_file}."),
+            ));
+        }
+        Ok(())
+    }
+
+    fn file_path(&self, file_system: &dyn FileSystem, file_name: &str) -> String {
+        file_system.join(vec![self.directory.to_string(), file_name.to_string()])
+    }
+}
+
+fn meta_file_name(found_package: &FoundPackage) -> String {
+    format!("{}.meta.json", found_package.name)
+}
+
+const MARKER_FILES: [(&str, &str); 2] = [
+    (".gitignore", "# Automatically created by Grimp.\n*"),
+    (
+        "CACHEDIR.TAG",
+        "Signature: 8a477f597d28d172789f06886806bc55\n\
+         # This file is a cache directory tag automatically created by Grimp.\n\
+         # For information about cache directory tags see https://bford.info/cachedir/",
+    ),
+];
