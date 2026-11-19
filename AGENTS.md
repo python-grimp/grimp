@@ -12,7 +12,7 @@ hybrid Python/Rust project: the public API and orchestration are in Python
 
 - `domain/` — core types (`valueobjects.py`, `analysis.py`), no dependencies on other layers.
 - `application/` — use cases and ports (`usecases.py`, `graph.py`, `config.py`).
-- `adaptors/` — implementations of application ports (package finding, timing).
+- `adaptors/` — implementations of application ports (package finding).
 - `main.py` — top-level entry point (`grimp.build_graph`), wires adaptors to use cases.
 - `exceptions.py` — shared exceptions, importable from any layer.
 

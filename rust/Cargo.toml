@@ -24,9 +24,7 @@ const_format = "0.2.34"
 ruff_python_parser = { git = "https://github.com/astral-sh/ruff.git", tag = "0.15.20" }
 ruff_python_ast = { git = "https://github.com/astral-sh/ruff.git", tag = "0.15.20" }
 ruff_source_file = { git = "https://github.com/astral-sh/ruff.git", tag = "0.15.20" }
-serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0.137", features = ["float_roundtrip"] }
-serde_yaml = "0.9"
 encoding_rs = "0.8.35"
 blake2 = "0.10.6"
 unicode-ident = "1.0.24"
