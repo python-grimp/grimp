@@ -68,7 +68,7 @@ pub trait FileSystem: Send + Sync {
 
     fn read(&self, file_name: &str) -> GrimpResult<String>;
 
-    fn write(&mut self, file_name: &str, contents: &str) -> PyResult<()>;
+    fn write(&mut self, file_name: &str, contents: &str) -> GrimpResult<()>;
 }
 
 #[derive(Clone)]
@@ -183,14 +183,13 @@ impl FileSystem for RealBasicFileSystem {
         }
     }
 
-    fn write(&mut self, file_name: &str, contents: &str) -> PyResult<()> {
+    fn write(&mut self, file_name: &str, contents: &str) -> GrimpResult<()> {
         let file_path: PathBuf = file_name.into();
         if let Some(patent_dir) = file_path.parent() {
             fs::create_dir_all(patent_dir)?;
         }
-        File::create(file_path)?
-            .write_all(contents.as_bytes())
-            .map_err(Into::into)
+        File::create(file_path)?.write_all(contents.as_bytes())?;
+        Ok(())
     }
 }
 
@@ -226,7 +225,7 @@ impl PyRealBasicFileSystem {
     }
 
     fn write(&mut self, file_name: &str, contents: &str) -> PyResult<()> {
-        self.inner.write(file_name, contents)
+        Ok(self.inner.write(file_name, contents)?)
     }
 }
 
@@ -313,7 +312,7 @@ impl FileSystem for FakeBasicFileSystem {
     }
 
     #[allow(unused_variables)]
-    fn write(&mut self, file_name: &str, contents: &str) -> PyResult<()> {
+    fn write(&mut self, file_name: &str, contents: &str) -> GrimpResult<()> {
         let mut contents_mut = self.contents.lock().unwrap();
         contents_mut.insert(file_name.to_string(), contents.to_string());
         Ok(())
@@ -354,7 +353,7 @@ impl PyFakeBasicFileSystem {
     }
 
     fn write(&mut self, file_name: &str, contents: &str) -> PyResult<()> {
-        self.inner.write(file_name, contents)
+        Ok(self.inner.write(file_name, contents)?)
     }
 
     // Temporary workaround method for Python tests.

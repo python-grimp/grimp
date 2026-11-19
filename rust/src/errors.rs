@@ -1,6 +1,6 @@
 use crate::exceptions;
 use pyo3::PyErr;
-use pyo3::exceptions::{PyFileNotFoundError, PyUnicodeError, PyValueError};
+use pyo3::exceptions::{PyFileNotFoundError, PyOSError, PyUnicodeError, PyValueError};
 use ruff_python_parser::ParseError as RuffParseError;
 use thiserror::Error;
 
@@ -45,6 +45,9 @@ pub enum GrimpError {
 
     #[error("{0}")]
     UndecodableFile(String),
+
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
 }
 
 pub type GrimpResult<T> = Result<T, GrimpError>;
@@ -70,6 +73,7 @@ impl From<GrimpError> for PyErr {
             GrimpError::FileNotFound(_) => PyFileNotFoundError::new_err(value.to_string()),
             // Not UnicodeDecodeError, as that can't be created from just a message.
             GrimpError::UndecodableFile(_) => PyUnicodeError::new_err(value.to_string()),
+            GrimpError::Io(_) => PyOSError::new_err(value.to_string()),
         }
     }
 }
