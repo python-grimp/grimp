@@ -81,7 +81,7 @@ fn module_is_descendant(module_name: &str, potential_ancestor: &str) -> bool {
 /// Statically analyses the given module and returns a set of Modules that
 /// it imports.
 #[allow(clippy::borrowed_box)]
-fn scan_for_imports_no_py(
+pub fn scan_for_imports_no_py(
     file_system: &Box<dyn FileSystem + Send + Sync>,
     found_packages: &HashSet<FoundPackage>,
     include_external_packages: bool,

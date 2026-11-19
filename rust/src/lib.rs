@@ -3,6 +3,7 @@ pub mod errors;
 pub mod exceptions;
 mod filesystem;
 pub mod graph;
+mod graph_building;
 pub mod import_parsing;
 mod import_scanning;
 pub mod module_expressions;
@@ -23,6 +24,9 @@ mod _rustgrimp {
 
     #[pymodule_export]
     use crate::graph::GraphWrapper;
+
+    #[pymodule_export]
+    use crate::graph_building::build_graph;
 
     #[pymodule_export]
     use crate::filesystem::{PyFakeBasicFileSystem, PyRealBasicFileSystem};

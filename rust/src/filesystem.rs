@@ -452,6 +452,10 @@ fn parse_indented_file_system_string(file_system_string: &str) -> HashMap<String
     file_paths_map
 }
 
+pub fn real_file_system() -> Box<dyn FileSystem + Send + Sync> {
+    Box::new(RealBasicFileSystem {})
+}
+
 #[allow(clippy::borrowed_box)]
 pub fn get_file_system_boxed<'py>(
     file_system: &Bound<'py, PyAny>,
