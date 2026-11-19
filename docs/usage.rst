@@ -86,14 +86,6 @@ Building the graph
     :return: An import graph that you can use to analyse the package.
     :rtype: ``ImportGraph``
 
-.. py:function:: grimp.build_graph_rust(package_name, *additional_package_names, include_external_packages=False, exclude_type_checking_imports=False, cache_dir=...)
-
-    A faster alternative to ``grimp.build_graph``, which does everything (finding modules, reading the cache and
-    assembling the graph) in Rust. It takes the same parameters and returns an equivalent graph. It uses the same cache
-    files as ``grimp.build_graph``, so the two can be used interchangeably.
-
-    Unlike ``grimp.build_graph``, it doesn't log anything about cache usage or skipped modules.
-
 .. _typing module documentation: https://docs.python.org/3/library/typing.html#typing.TYPE_CHECKING
 
 Methods for analysing the module tree

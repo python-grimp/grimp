@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from grimp import exceptions
+from grimp import build_graph, exceptions
 
 
-def test_syntax_error_includes_module(build_graph):
+def test_syntax_error_includes_module():
     filename = str(
         (
             Path(__file__).parent.parent / "assets" / "syntaxerrorpackage" / "foo" / "one.py"

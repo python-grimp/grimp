@@ -3,9 +3,7 @@ from pathlib import Path
 import pytest
 
 from grimp import exceptions
-from grimp.adaptors.filesystem import FileSystem
 from grimp.adaptors.packagefinder import ImportLibPackageFinder
-from tests.adaptors.filesystem import FakeFileSystem
 
 assets = (Path(__file__).parent.parent.parent / "assets").resolve()
 
@@ -44,9 +42,7 @@ assets = (Path(__file__).parent.parent.parent / "assets").resolve()
     ),
 )
 def test_determine_package_directories(package, expected):
-    assert (
-        ImportLibPackageFinder().determine_package_directories(package, FileSystem()) == expected
-    )
+    assert ImportLibPackageFinder().determine_package_directories(package) == expected
 
 
 @pytest.mark.parametrize(
@@ -63,4 +59,4 @@ def test_determine_package_directories_doesnt_support_non_top_level_modules(pack
     with pytest.raises(
         exceptions.NotATopLevelModule,
     ):
-        ImportLibPackageFinder().determine_package_directories(package, FakeFileSystem())
+        ImportLibPackageFinder().determine_package_directories(package)

@@ -294,13 +294,6 @@ def test_build_django_uncached(benchmark):
     benchmark(grimp.build_graph, "django", cache_dir=None)
 
 
-def test_build_django_uncached_rust(benchmark):
-    """
-    Benchmarks building a graph of real package using build_graph_rust, with the cache turned off.
-    """
-    benchmark(grimp.build_graph_rust, "django", cache_dir=None)
-
-
 def test_build_django_from_cache_no_misses(benchmark):
     """
     Benchmarks building a graph of real package - in this case Django.
@@ -311,16 +304,6 @@ def test_build_django_from_cache_no_misses(benchmark):
     grimp.build_graph("django")
 
     benchmark(grimp.build_graph, "django")
-
-
-def test_build_django_from_cache_no_misses_rust(benchmark):
-    """
-    Benchmarks building a graph of real package using build_graph_rust, fully utilizing the cache.
-    """
-    # Populate the cache first, before beginning the benchmark.
-    grimp.build_graph_rust("django")
-
-    benchmark(grimp.build_graph_rust, "django")
 
 
 @pytest.mark.parametrize(

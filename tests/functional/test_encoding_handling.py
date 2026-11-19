@@ -2,12 +2,14 @@ import re
 
 import pytest
 
+import grimp
 
-def test_build_graph_of_non_ascii_source(build_graph):
+
+def test_build_graph_of_non_ascii_source():
     """
     Tests we can cope with non ascii Python source files.
     """
-    graph = build_graph("encodingpackage", cache_dir=None)
+    graph = grimp.build_graph("encodingpackage", cache_dir=None)
 
     result = graph.get_import_details(
         importer="encodingpackage.importer", imported="encodingpackage.imported"
@@ -24,11 +26,11 @@ def test_build_graph_of_non_ascii_source(build_graph):
     ] == result
 
 
-def test_build_graph_of_non_utf8_source(build_graph):
+def test_build_graph_of_non_utf8_source():
     """
     Tests we can cope with non UTF-8 Python source files.
     """
-    graph = build_graph("encodingpackage", cache_dir=None)
+    graph = grimp.build_graph("encodingpackage", cache_dir=None)
 
     result = graph.get_import_details(
         importer="encodingpackage.shift_jis_importer", imported="encodingpackage.imported"
@@ -60,7 +62,7 @@ def test_build_graph_of_non_utf8_source(build_graph):
     ),
 )
 def test_build_graph_of_source_declaring_encoding_with_python_specific_name(
-    build_graph, tmp_path, monkeypatch, declared_encoding, codec, imported_name
+    tmp_path, monkeypatch, declared_encoding, codec, imported_name
 ):
     """
     Tests we can cope with source files that declare their encoding using a name that Python
@@ -77,7 +79,7 @@ def test_build_graph_of_source_declaring_encoding_with_python_specific_name(
     )
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    graph = build_graph("declaredencodingpackage", cache_dir=None)
+    graph = grimp.build_graph("declaredencodingpackage", cache_dir=None)
 
     result = graph.get_import_details(
         importer="declaredencodingpackage.importer", imported="declaredencodingpackage.imported"
@@ -98,7 +100,7 @@ def test_build_graph_of_source_declaring_encoding_with_python_specific_name(
     "declared_encoding",
     ("latin-1", "latin_1", "iso-8859-1", "iso_8859_1"),
 )
-def test_build_graph_of_true_latin_1_source(build_graph, tmp_path, monkeypatch, declared_encoding):
+def test_build_graph_of_true_latin_1_source(tmp_path, monkeypatch, declared_encoding):
     """
     Tests that Latin-1 is decoded as true byte-to-code-point Latin-1, rather than Windows-1252.
 
@@ -113,7 +115,7 @@ def test_build_graph_of_true_latin_1_source(build_graph, tmp_path, monkeypatch, 
     (package_directory / "importer.py").write_bytes(source.encode("latin-1"))
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    graph = build_graph("latin1package", cache_dir=None)
+    graph = grimp.build_graph("latin1package", cache_dir=None)
 
     result = graph.get_import_details(
         importer="latin1package.importer", imported="latin1package.imported"
@@ -147,7 +149,7 @@ def test_build_graph_of_true_latin_1_source(build_graph, tmp_path, monkeypatch, 
     ),
 )
 def test_undecodable_source_raises_unicode_error_including_filename(
-    build_graph, tmp_path, monkeypatch, contents, expected_problem
+    tmp_path, monkeypatch, contents, expected_problem
 ):
     package_directory = tmp_path / "undecodablepackage"
     package_directory.mkdir()
@@ -160,4 +162,4 @@ def test_undecodable_source_raises_unicode_error_including_filename(
         UnicodeError,
         match=re.escape(f"Failed to decode file {module_filename} {expected_problem}"),
     ):
-        build_graph("undecodablepackage", cache_dir=None)
+        grimp.build_graph("undecodablepackage", cache_dir=None)

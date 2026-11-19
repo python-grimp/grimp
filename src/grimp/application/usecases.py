@@ -4,20 +4,15 @@ Use cases handle application logic.
 
 from __future__ import annotations
 
-import itertools
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 from typing import cast
 
 from grimp import _rustgrimp as rust  # type: ignore[attr-defined]
 
 from ..application.graph import ImportGraph
-from ..application.ports import caching
-from ..application.ports.filesystem import AbstractFileSystem, BasicFileSystem
-from ..application.ports.modulefinder import AbstractModuleFinder, FoundPackage, ModuleFile
-from ..application.ports.packagefinder import AbstractPackageFinder
-from ..domain.valueobjects import DirectImport, Module
 from .config import settings
-from .scanning import scan_imports
+
+DEFAULT_CACHE_DIR = ".grimp_cache"
 
 
 class NotSupplied:
@@ -53,49 +48,14 @@ def build_graph(
             "mypackage", "anotherpackage", "onemore", include_external_packages=True,
         )
     """
-    file_system: AbstractFileSystem = settings.FILE_SYSTEM
-
-    found_packages = _find_packages(
-        file_system=file_system,
-        package_names=[package_name, *additional_package_names],
-    )
-
-    imports_by_module = _scan_packages(
-        found_packages=found_packages,
-        file_system=file_system.convert_to_basic(),
-        include_external_packages=include_external_packages,
-        exclude_type_checking_imports=exclude_type_checking_imports,
-        cache_dir=cache_dir,
-    )
-
-    graph = _assemble_graph(found_packages, imports_by_module)
-
-    return graph
-
-
-def build_graph_rust(
-    package_name: str,
-    *additional_package_names: str,
-    include_external_packages: bool = False,
-    exclude_type_checking_imports: bool = False,
-    cache_dir: str | type[NotSupplied] | None = NotSupplied,
-) -> ImportGraph:
-    """
-    Build and return an import graph for the supplied package name(s), using Rust throughout.
-
-    This takes the same arguments as, and is intended as a faster drop-in replacement for,
-    ``build_graph``. It shares its cache with ``build_graph``.
-    """
     package_names = _validate_package_names_are_strings([package_name, *additional_package_names])
     packages = [
         (name, directory)
         for name in package_names
-        for directory in settings.PACKAGE_FINDER.determine_package_directories(
-            package_name=name, file_system=settings.FILE_SYSTEM
-        )
+        for directory in settings.PACKAGE_FINDER.determine_package_directories(name)
     ]
     if cache_dir is NotSupplied:
-        cache_dir = settings.CACHE_CLASS.cache_dir_or_default(None)
+        cache_dir = DEFAULT_CACHE_DIR
 
     rust_graph = rust.build_graph(
         packages,
@@ -107,31 +67,6 @@ def build_graph_rust(
     return ImportGraph.from_rustgraph(rust_graph)
 
 
-def _find_packages(
-    file_system: AbstractFileSystem, package_names: Sequence[object]
-) -> set[FoundPackage]:
-    package_names = _validate_package_names_are_strings(package_names)
-
-    module_finder: AbstractModuleFinder = settings.MODULE_FINDER
-    package_finder: AbstractPackageFinder = settings.PACKAGE_FINDER
-
-    found_packages: set[FoundPackage] = set()
-
-    for package_name in package_names:
-        package_directories = package_finder.determine_package_directories(
-            package_name=package_name, file_system=file_system
-        )
-        for package_directory in package_directories:
-            found_package = module_finder.find_package(
-                package_name=package_name,
-                package_directory=package_directory,
-                file_system=file_system,
-            )
-            found_packages.add(found_package)
-
-    return found_packages
-
-
 def _validate_package_names_are_strings(
     package_names: Sequence[object],
 ) -> Sequence[str]:
@@ -140,107 +75,3 @@ def _validate_package_names_are_strings(
             msg = f"Package names must be strings, got {name.__class__.__name__}."
             raise TypeError(msg)
     return cast("Sequence[str]", package_names)
-
-
-def _scan_packages(
-    found_packages: set[FoundPackage],
-    file_system: BasicFileSystem,
-    *,
-    include_external_packages: bool,
-    exclude_type_checking_imports: bool,
-    cache_dir: str | type[NotSupplied] | None,
-) -> dict[Module, set[DirectImport]]:
-    if cache_dir is not None:
-        cache_dir_if_supplied = cache_dir if cache_dir != NotSupplied else None
-        cache: caching.Cache = settings.CACHE_CLASS.setup(
-            file_system=file_system,
-            found_packages=found_packages,
-            include_external_packages=include_external_packages,
-            exclude_type_checking_imports=exclude_type_checking_imports,
-            cache_dir=cache_dir_if_supplied,
-        )
-
-    module_files_to_scan = {
-        module_file
-        for found_package in found_packages
-        for module_file in found_package.module_files
-    }
-
-    imports_by_module_file: dict[ModuleFile, set[DirectImport]] = {}
-
-    if cache_dir is not None:
-        imports_by_module_file.update(_read_imports_from_cache(module_files_to_scan, cache=cache))
-
-    remaining_module_files_to_scan = module_files_to_scan.difference(imports_by_module_file)
-    if remaining_module_files_to_scan:
-        imports_by_module_file.update(
-            scan_imports(
-                remaining_module_files_to_scan,
-                found_packages=found_packages,
-                include_external_packages=include_external_packages,
-                exclude_type_checking_imports=exclude_type_checking_imports,
-            )
-        )
-
-    imports_by_module: dict[Module, set[DirectImport]] = {
-        k.module: v for k, v in imports_by_module_file.items()
-    }
-
-    if cache_dir is not None:
-        cache.write(imports_by_module)
-
-    return imports_by_module
-
-
-def _assemble_graph(
-    found_packages: set[FoundPackage],
-    imports_by_module: dict[Module, set[DirectImport]],
-) -> ImportGraph:
-    graph: ImportGraph = settings.IMPORT_GRAPH_CLASS()
-
-    for namespace_package in itertools.chain.from_iterable(
-        found_package.namespace_packages for found_package in found_packages
-    ):
-        graph.add_module(namespace_package)
-
-    package_modules = {Module(found_package.name) for found_package in found_packages}
-
-    for module, direct_imports in imports_by_module.items():
-        graph.add_module(module.name)
-        for direct_import in direct_imports:
-            # Before we add the import, check to see if the imported module is in fact an
-            # external module, and if so, tell the graph that it is a squashed module.
-            graph.add_module(
-                direct_import.imported.name,
-                is_squashed=_is_external(direct_import.imported, package_modules),
-            )
-
-            graph.add_import(
-                importer=direct_import.importer.name,
-                imported=direct_import.imported.name,
-                line_number=direct_import.line_number,
-                line_contents=direct_import.line_contents,
-                is_lazy=direct_import.is_lazy,
-            )
-    return graph
-
-
-def _is_external(module: Module, package_modules: set[Module]) -> bool:
-    return not any(
-        module.is_descendant_of(package_module) or module == package_module
-        for package_module in package_modules
-    )
-
-
-def _read_imports_from_cache(
-    module_files: Iterable[ModuleFile], *, cache: caching.Cache
-) -> dict[ModuleFile, set[DirectImport]]:
-    imports_by_module_file: dict[ModuleFile, set[DirectImport]] = {}
-    for module_file in module_files:
-        try:
-            direct_imports = cache.read_imports(module_file)
-        except caching.CacheMiss:
-            continue
-        else:
-            imports_by_module_file[module_file] = direct_imports
-    return imports_by_module_file

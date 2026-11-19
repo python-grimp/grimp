@@ -1,5 +1,7 @@
 import pytest
 
+from grimp import build_graph
+
 """
 For ease of reference, these are the imports of all the files:
 
@@ -28,7 +30,7 @@ testpackage.three.gamma: testpackage.two.beta, testpackage.utils
 # ---------
 
 
-def test_modules(build_graph):
+def test_modules():
     graph = build_graph("testpackage", cache_dir=None)
 
     assert graph.modules == {
@@ -51,7 +53,7 @@ def test_modules(build_graph):
     }
 
 
-def test_add_module(build_graph):
+def test_add_module():
     graph = build_graph("testpackage", cache_dir=None)
     number_of_modules = len(graph.modules)
 
@@ -60,7 +62,7 @@ def test_add_module(build_graph):
     assert number_of_modules + 1 == len(graph.modules)
 
 
-def test_remove_module(build_graph):
+def test_remove_module():
     graph = build_graph("testpackage", cache_dir=None)
     number_of_modules = len(graph.modules)
 
@@ -69,7 +71,7 @@ def test_remove_module(build_graph):
     assert number_of_modules - 1 == len(graph.modules)
 
 
-def test_add_and_remove_import(build_graph):
+def test_add_and_remove_import():
     graph = build_graph("testpackage", cache_dir=None)
     a = "testpackage.one.delta.blue"
     b = "testpackage.two.alpha"
@@ -89,7 +91,7 @@ def test_add_and_remove_import(build_graph):
 # -----------
 
 
-def test_find_children(build_graph):
+def test_find_children():
     graph = build_graph("testpackage", cache_dir=None)
 
     assert graph.find_children("testpackage.one") == {
@@ -100,7 +102,7 @@ def test_find_children(build_graph):
     }
 
 
-def test_find_descendants(build_graph):
+def test_find_descendants():
     graph = build_graph("testpackage", cache_dir=None)
 
     assert graph.find_descendants("testpackage.one") == {
@@ -116,7 +118,7 @@ def test_find_descendants(build_graph):
 # --------------
 
 
-def test_find_modules_directly_imported_by(build_graph):
+def test_find_modules_directly_imported_by():
     graph = build_graph("testpackage", cache_dir=None)
 
     result = graph.find_modules_directly_imported_by("testpackage.utils")
@@ -124,7 +126,7 @@ def test_find_modules_directly_imported_by(build_graph):
     assert {"testpackage.one", "testpackage.two.alpha"} == result
 
 
-def test_find_modules_that_directly_import(build_graph):
+def test_find_modules_that_directly_import():
     graph = build_graph("testpackage", cache_dir=None)
 
     result = graph.find_modules_that_directly_import("testpackage.one.alpha")
@@ -139,7 +141,7 @@ def test_find_modules_that_directly_import(build_graph):
     } == result
 
 
-def test_direct_import_exists(build_graph):
+def test_direct_import_exists():
     graph = build_graph("testpackage", cache_dir=None)
 
     assert False is graph.direct_import_exists(
@@ -153,7 +155,7 @@ def test_direct_import_exists(build_graph):
     )
 
 
-def test_get_import_details(build_graph):
+def test_get_import_details():
     graph = build_graph("testpackage", cache_dir=None)
 
     assert [
@@ -172,7 +174,7 @@ def test_get_import_details(build_graph):
 
 
 class TestPathExists:
-    def test_as_packages_false(self, build_graph):
+    def test_as_packages_false(self):
         graph = build_graph("testpackage", cache_dir=None)
 
         assert not graph.chain_exists(
@@ -181,7 +183,7 @@ class TestPathExists:
 
         assert graph.chain_exists(imported="testpackage.one.alpha", importer="testpackage.utils")
 
-    def test_as_packages_true(self, build_graph):
+    def test_as_packages_true(self):
         graph = build_graph("testpackage", cache_dir=None)
 
         assert graph.chain_exists(
@@ -193,7 +195,7 @@ class TestPathExists:
         )
 
 
-def test_find_shortest_chain(build_graph):
+def test_find_shortest_chain():
     graph = build_graph("testpackage", cache_dir=None)
 
     assert (
@@ -245,7 +247,7 @@ def test_find_shortest_chain(build_graph):
         ),
     ],
 )
-def test_find_shortest_chains(build_graph, as_packages: bool | None, expected_result: set[tuple]):
+def test_find_shortest_chains(as_packages: bool | None, expected_result: set[tuple]):
     importer = "testpackage.three"
     imported = "testpackage.one.alpha"
 
@@ -262,7 +264,7 @@ def test_find_shortest_chains(build_graph, as_packages: bool | None, expected_re
 
 
 class TestFindDownstreamModules:
-    def test_as_package_false(self, build_graph):
+    def test_as_package_false(self):
         graph = build_graph("testpackage", cache_dir=None)
 
         result = graph.find_downstream_modules("testpackage.one.alpha")
@@ -280,7 +282,7 @@ class TestFindDownstreamModules:
             "testpackage.three.gamma",
         } == result
 
-    def test_as_package_true(self, build_graph):
+    def test_as_package_true(self):
         graph = build_graph("testpackage", cache_dir=None)
 
         result = graph.find_downstream_modules("testpackage.one", as_package=True)
@@ -298,7 +300,7 @@ class TestFindDownstreamModules:
 
 
 class TestFindUpstreamModules:
-    def test_as_package_false(self, build_graph):
+    def test_as_package_false(self):
         graph = build_graph("testpackage", cache_dir=None)
 
         assert graph.find_upstream_modules("testpackage.one.alpha") == set()
@@ -309,7 +311,7 @@ class TestFindUpstreamModules:
             "testpackage.one.alpha",
         }
 
-    def test_as_package_true(self, build_graph):
+    def test_as_package_true(self):
         graph = build_graph("testpackage", cache_dir=None)
 
         assert graph.find_upstream_modules("testpackage.two", as_package=True) == {
@@ -320,13 +322,13 @@ class TestFindUpstreamModules:
 
 
 class TestExcludeTypeCheckingImports:
-    def test_exclude_false(self, build_graph):
+    def test_exclude_false(self):
         graph = build_graph("testpackage", cache_dir=None, exclude_type_checking_imports=False)
         assert True is graph.direct_import_exists(
             importer="testpackage.one.beta", imported="testpackage.two.alpha"
         )
 
-    def test_exclude_true(self, build_graph):
+    def test_exclude_true(self):
         graph = build_graph("testpackage", cache_dir=None, exclude_type_checking_imports=True)
         assert False is graph.direct_import_exists(
             importer="testpackage.one.beta", imported="testpackage.two.alpha"

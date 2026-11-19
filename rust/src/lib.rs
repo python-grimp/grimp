@@ -14,26 +14,13 @@ use pyo3::prelude::*;
 #[pymodule]
 mod _rustgrimp {
     #[pymodule_export]
-    use crate::import_scanning::scan_for_imports;
-
-    #[pymodule_export]
-    use crate::caching::read_cache_data_map_file;
-
-    #[pymodule_export]
-    use crate::caching::write_cache_data_map_file;
-
-    #[pymodule_export]
     use crate::graph::GraphWrapper;
 
     #[pymodule_export]
     use crate::graph_building::build_graph;
 
     #[pymodule_export]
-    use crate::filesystem::{PyFakeBasicFileSystem, PyRealBasicFileSystem};
-
-    #[pymodule_export]
     use crate::exceptions::{
-        CacheVersionMismatch, CorruptCache, InvalidModuleExpression, ModuleNotPresent,
-        NoSuchContainer, ParseError,
+        InvalidModuleExpression, ModuleNotPresent, NoSuchContainer, ParseError,
     };
 }

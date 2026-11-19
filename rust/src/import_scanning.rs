@@ -1,10 +1,9 @@
 use crate::errors::{GrimpError, GrimpResult};
-use crate::filesystem::{FileSystem, get_file_system_boxed};
+use crate::filesystem::FileSystem;
+use crate::import_parsing;
 use crate::module_finding::{FoundPackage, Module};
-use crate::{import_parsing, module_finding};
 use itertools::Itertools;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PySet};
 /// Statically analyses some Python modules for import statements within their shared package.
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -17,44 +16,6 @@ pub struct DirectImport {
     pub line_number: usize,
     pub line_contents: String,
     pub is_lazy: bool,
-}
-
-impl<'a, 'py> FromPyObject<'a, 'py> for DirectImport {
-    type Error = PyErr;
-
-    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
-        let importer: String = ob.getattr("importer")?.getattr("name")?.extract()?;
-        let imported: String = ob.getattr("imported")?.getattr("name")?.extract()?;
-        let line_number: usize = ob.getattr("line_number")?.extract()?;
-        let line_contents: String = ob.getattr("line_contents")?.extract()?;
-        let is_lazy: bool = ob.getattr("is_lazy")?.extract()?;
-
-        Ok(DirectImport {
-            importer,
-            imported,
-            line_number,
-            line_contents,
-            is_lazy,
-        })
-    }
-}
-
-fn py_found_packages_to_rust(py_found_packages: &Bound<'_, PyAny>) -> HashSet<FoundPackage> {
-    let py_set = py_found_packages
-        .cast::<PySet>()
-        .expect("Expected py_found_packages to be a Python set.");
-
-    let mut rust_found_packages = HashSet::new();
-    // Iterate over the elements in the Python set.
-    for py_found_package_any in py_set.iter() {
-        // Extract each Python 'FoundPackage' object into a Rust 'FoundPackage' struct.
-        // Panics if extraction fails, as specified.
-        let rust_found_package: FoundPackage = py_found_package_any
-            .extract()
-            .expect("Failed to extract Python FoundPackage to Rust FoundPackage.");
-        rust_found_packages.insert(rust_found_package);
-    }
-    rust_found_packages
 }
 
 fn get_modules_from_found_packages(found_packages: &HashSet<FoundPackage>) -> HashSet<Module> {
@@ -177,36 +138,6 @@ fn scan_for_imports_no_py_single_module(
     }
 
     Ok(imports)
-}
-
-fn to_py_direct_imports<'a>(
-    py: Python<'a>,
-    rust_imports: &HashSet<DirectImport>,
-) -> Bound<'a, PySet> {
-    let valueobjects_pymodule = PyModule::import(py, "grimp.domain.valueobjects").unwrap();
-    let py_module_class = valueobjects_pymodule.getattr("Module").unwrap();
-    let py_direct_import_class = valueobjects_pymodule.getattr("DirectImport").unwrap();
-
-    let pyset = PySet::empty(py).unwrap();
-
-    for rust_import in rust_imports {
-        let importer = py_module_class.call1((&rust_import.importer,)).unwrap();
-        let imported = py_module_class.call1((&rust_import.imported,)).unwrap();
-        let kwargs = PyDict::new(py);
-        kwargs.set_item("importer", &importer).unwrap();
-        kwargs.set_item("imported", &imported).unwrap();
-        kwargs
-            .set_item("line_number", rust_import.line_number)
-            .unwrap();
-        kwargs
-            .set_item("line_contents", &rust_import.line_contents)
-            .unwrap();
-        kwargs.set_item("is_lazy", rust_import.is_lazy).unwrap();
-        let py_direct_import = py_direct_import_class.call((), Some(&kwargs)).unwrap();
-        pyset.add(&py_direct_import).unwrap();
-    }
-
-    pyset
 }
 
 #[allow(clippy::borrowed_box)]
@@ -363,76 +294,6 @@ fn _distill_external_module(
     } else {
         Some(module_name.split('.').next().unwrap().to_string())
     }
-}
-
-/// Convert the rust data structure into a Python dict[Module, set[DirectImport]].
-pub fn imports_by_module_to_py(
-    py: Python,
-    imports_by_module: HashMap<module_finding::Module, HashSet<DirectImport>>,
-) -> Bound<PyDict> {
-    let valueobjects_pymodule = PyModule::import(py, "grimp.domain.valueobjects").unwrap();
-    let py_module_class = valueobjects_pymodule.getattr("Module").unwrap();
-
-    let imports_by_module_py = PyDict::new(py);
-    for (module, imports) in imports_by_module.iter() {
-        let py_module_instance = py_module_class.call1((module.name.clone(),)).unwrap();
-        let py_imports = to_py_direct_imports(py, imports);
-        imports_by_module_py
-            .set_item(py_module_instance, py_imports)
-            .unwrap();
-    }
-    imports_by_module_py
-}
-
-/// Statically analyses the given module and returns a set of Modules that
-/// it imports.
-/// Python args:
-///
-/// - module_files                   The modules to scan.
-/// - found_packages:                Set of FoundPackages containing all the modules
-///                                  for analysis.
-/// - include_external_packages:     Whether to include imports of external modules (i.e.
-///                                  modules not contained in modules_by_package_directory)
-///                                  in the results.
-/// - exclude_type_checking_imports: If True, don't include imports behind TYPE_CHECKING guards.
-/// - file_system:                   The file system interface to use. (A BasicFileSystem.)
-///
-/// Returns dict[Module, set[DirectImport]].
-#[pyfunction]
-pub fn scan_for_imports<'py>(
-    py: Python<'py>,
-    module_files: Vec<Bound<'py, PyAny>>,
-    found_packages: Bound<'py, PyAny>,
-    include_external_packages: bool,
-    exclude_type_checking_imports: bool,
-    file_system: Bound<'py, PyAny>,
-) -> PyResult<Bound<'py, PyDict>> {
-    let file_system_boxed = get_file_system_boxed(&file_system)?;
-    let found_packages_rust = py_found_packages_to_rust(&found_packages);
-    let modules_rust: HashSet<module_finding::Module> = module_files
-        .iter()
-        .map(|module_file| {
-            module_file
-                .getattr("module")
-                .unwrap()
-                .extract::<module_finding::Module>()
-                .unwrap()
-        })
-        .collect();
-
-    let imports_by_module = py
-        .detach(|| {
-            scan_for_imports_no_py(
-                &file_system_boxed,
-                &found_packages_rust,
-                include_external_packages,
-                &modules_rust,
-                exclude_type_checking_imports,
-            )
-        })
-        .map_err(|e| into_py_err(py, e))?;
-
-    Ok(imports_by_module_to_py(py, imports_by_module))
 }
 
 /// Convert a `GrimpError` to a Python exception, translating syntax errors in the scanned

@@ -2,9 +2,11 @@ import re
 
 import pytest
 
+from grimp import build_graph
+
 
 @pytest.mark.parametrize("include_external_packages", (True, False))
-def test_happy_path(build_graph, write_files, include_external_packages):
+def test_happy_path(write_files, include_external_packages):
     write_files(
         {
             "mypackage/__init__.py": "",
@@ -48,7 +50,7 @@ def test_happy_path(build_graph, write_files, include_external_packages):
                 graph.find_children(module)
 
 
-def test_boolean_additional_package_raises_type_error(build_graph):
+def test_boolean_additional_package_raises_type_error():
     """
     Tests that a useful error message if build_graph is called
     with a boolean as the second argument.
@@ -68,24 +70,24 @@ class TestCacheDir:
         # Default caching writes to the current directory.
         monkeypatch.chdir(tmp_path)
 
-    def test_supplied(self, build_graph, tmp_path):
+    def test_supplied(self, tmp_path):
         build_graph("mypackage", cache_dir=str(tmp_path / "supplied"))
 
         assert (tmp_path / "supplied" / "mypackage.meta.json").exists()
         assert not (tmp_path / ".grimp_cache").exists()
 
-    def test_not_supplied_uses_default(self, build_graph, tmp_path):
+    def test_not_supplied_uses_default(self, tmp_path):
         build_graph("mypackage")
 
         assert (tmp_path / ".grimp_cache" / "mypackage.meta.json").exists()
 
-    def test_none_disables_caching(self, build_graph, tmp_path):
+    def test_none_disables_caching(self, tmp_path):
         build_graph("mypackage", cache_dir=None)
 
         assert not (tmp_path / ".grimp_cache").exists()
 
 
-def test_forgives_wrong_type_being_passed_to_include_external_packages(build_graph, write_files):
+def test_forgives_wrong_type_being_passed_to_include_external_packages(write_files):
     write_files(
         {
             "mypackage/__init__.py": "",
@@ -105,7 +107,7 @@ def test_forgives_wrong_type_being_passed_to_include_external_packages(build_gra
     assert graph.modules == {"mypackage", "mypackage.foo", "mypackage.foo.one"}
 
 
-def test_namespace_package_passed_as_root(build_graph, write_files):
+def test_namespace_package_passed_as_root(write_files):
     # A namespace package can span several directories.
     write_files(
         {

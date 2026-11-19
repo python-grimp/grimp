@@ -1,19 +1,18 @@
 use crate::errors::GrimpResult;
-use pyo3::{prelude::*, types::PyFrozenSet};
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, FromPyObject)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ModuleFile {
     pub module: Module,
 }
 
 /// A Python module.
 /// The string is the importable name, e.g. "mypackage.foo".
-#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Hash, FromPyObject)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub struct Module {
     pub name: String,
 }
@@ -34,59 +33,11 @@ pub struct FoundPackage {
     pub namespace_packages: BTreeSet<Module>,
 }
 
-/// Implements conversion from a Python 'FoundPackage' object to the Rust 'FoundPackage' struct.
-/// It extracts 'name', 'directory', and converts the 'module_files' frozenset into a Rust BTreeSet.
-impl<'a, 'py> FromPyObject<'a, 'py> for FoundPackage {
-    type Error = PyErr;
-
-    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
-        let name: String = ob.getattr("name")?.extract()?;
-        // Extract the 'directory' attribute.
-        let directory: String = ob.getattr("directory")?.extract()?;
-
-        // Access the 'module_files' attribute.
-        let module_files_py = ob.getattr("module_files")?;
-        // Downcast the PyAny object to a PyFrozenSet, as Python 'FrozenSet' maps to 'PyFrozenSet'.
-        let module_files_frozenset = module_files_py.cast::<PyFrozenSet>()?;
-
-        let mut module_files = BTreeSet::new();
-        // Iterate over the Python frozenset.
-        for py_module_file_any in module_files_frozenset.iter() {
-            // Extract each element (PyAny) into a Rust 'ModuleFile'.
-            let module_file: ModuleFile = py_module_file_any.extract()?;
-            module_files.insert(module_file);
-        }
-
-        // Access the 'namespace_packages' attribute.
-        let namespace_packages_py = ob.getattr("namespace_packages")?;
-        // Downcast the PyAny object to a PyFrozenSet, as Python 'FrozenSet' maps to 'PyFrozenSet'.
-        let namespace_packages_frozenset = namespace_packages_py.cast::<PyFrozenSet>()?;
-
-        let mut namespace_packages = BTreeSet::new();
-        // Iterate over the Python frozenset.
-        for py_namespace_any in namespace_packages_frozenset.iter() {
-            // Extract each element (PyAny) into a Rust 'ModuleFile'.
-            let namespace_package: String = py_namespace_any.extract()?;
-            namespace_packages.insert(Module {
-                name: namespace_package,
-            });
-        }
-
-        Ok(FoundPackage {
-            name,
-            directory,
-            module_files,
-            namespace_packages,
-        })
-    }
-}
-
 /// Finds the modules and namespace packages inside a package directory.
 ///
-/// This is a port of `grimp.adaptors.modulefinder.ModuleFinder`.
-///
 /// Also returns the mtime of each module's file (keyed by module name), in the same form as
-/// Python's `os.path.getmtime`, so that it's interchangeable with the Python cache.
+/// Python's `os.path.getmtime`, so that caches written by earlier versions of Grimp (which used
+/// that) can still be used.
 pub fn find_package(
     name: &str,
     directory: &str,

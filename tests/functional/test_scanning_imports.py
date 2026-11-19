@@ -8,6 +8,7 @@ import textwrap
 
 import pytest
 
+from grimp import build_graph
 from grimp.domain.valueobjects import DirectImport, Module
 
 
@@ -90,7 +91,7 @@ def _foo_package_files(contents_by_path: dict[str, str]) -> dict[str, str]:
         ),
     ),
 )
-def test_absolute_imports(build_graph, write_files, include_external_packages, expected_result):
+def test_absolute_imports(write_files, include_external_packages, expected_result):
     write_files(
         {
             "foo/__init__.py": "",
@@ -113,7 +114,7 @@ def test_absolute_imports(build_graph, write_files, include_external_packages, e
     assert _direct_imports(graph, "foo.one") == expected_result
 
 
-def test_lazy_imports(build_graph, write_files):
+def test_lazy_imports(write_files):
     write_files(
         _foo_package_files(
             {
@@ -224,7 +225,7 @@ def test_lazy_imports(build_graph, write_files):
     }
 
 
-def test_non_ascii(build_graph, write_files):
+def test_non_ascii(write_files):
     write_files(
         {
             "mypackage/__init__.py": "",
@@ -262,7 +263,7 @@ def test_non_ascii(build_graph, write_files):
     }
 
 
-def test_single_namespace_package_portion(build_graph, write_files):
+def test_single_namespace_package_portion(write_files):
     MODULE_ONE = Module("namespace.foo.one")
     MODULE_TWO = Module("namespace.foo.two")
     MODULE_THREE = Module("namespace.foo.three")
@@ -328,7 +329,7 @@ def test_single_namespace_package_portion(build_graph, write_files):
 
 
 @pytest.mark.parametrize("include_external_packages", (True, False))
-def test_import_of_portion_not_in_graph(build_graph, write_files, include_external_packages):
+def test_import_of_portion_not_in_graph(write_files, include_external_packages):
     # Include two namespaces, one deeper than the other.
     #
     # Note: unlike the (in-memory) layout this was originally written against, foo.one can't
@@ -486,9 +487,7 @@ def test_import_of_portion_not_in_graph(build_graph, write_files, include_extern
         ),
     ),
 )
-def test_absolute_from_imports(
-    build_graph, write_files, include_external_packages, expected_result
-):
+def test_absolute_from_imports(write_files, include_external_packages, expected_result):
     write_files(
         _foo_package_files(
             {
@@ -515,7 +514,7 @@ def test_absolute_from_imports(
 
 
 @pytest.mark.parametrize("module_to_scan_is_package", (True, False))
-def test_relative_from_imports(build_graph, write_files, module_to_scan_is_package):
+def test_relative_from_imports(write_files, module_to_scan_is_package):
     if module_to_scan_is_package:
         module_to_scan = Module("foo.one")
         module_path = "foo/one/__init__.py"
@@ -568,7 +567,7 @@ def test_relative_from_imports(build_graph, write_files, module_to_scan_is_packa
     "import_source",
     ("from .two.yellow import my_function", "from foo.two.yellow import my_function"),
 )
-def test_trims_to_known_modules(build_graph, write_files, import_source):
+def test_trims_to_known_modules(write_files, import_source):
     write_files(
         {
             "foo/__init__.py": "",
@@ -590,7 +589,7 @@ def test_trims_to_known_modules(build_graph, write_files, import_source):
     }
 
 
-def test_trims_to_known_modules_within_init_file(build_graph, write_files):
+def test_trims_to_known_modules_within_init_file(write_files):
     write_files(
         {
             "foo/__init__.py": "",
@@ -621,7 +620,7 @@ def test_trims_to_known_modules_within_init_file(build_graph, write_files):
     }
 
 
-def test_trims_whitespace_from_start_of_line_contents(build_graph, write_files):
+def test_trims_whitespace_from_start_of_line_contents(write_files):
     write_files(
         {
             "foo/__init__.py": "",
@@ -671,7 +670,7 @@ def test_trims_whitespace_from_start_of_line_contents(build_graph, write_files):
     ),
 )
 def test_external_package_imports_for_namespace_packages(
-    build_graph, write_files, statement, expected_module_name
+    write_files, statement, expected_module_name
 ):
     write_files(
         {
@@ -698,7 +697,7 @@ def test_external_package_imports_for_namespace_packages(
 
 
 @pytest.mark.parametrize("statement", ("import bar.blue", "from bar import blue"))
-def test_scans_multiple_packages(build_graph, write_files, statement):
+def test_scans_multiple_packages(write_files, statement):
     write_files(
         {
             "foo/__init__.py": "",
@@ -747,7 +746,7 @@ def test_scans_multiple_packages(build_graph, write_files, statement):
     ),
 )
 def test_exclude_type_checking_imports(
-    build_graph, write_files, exclude_type_checking_imports, statement, is_statement_valid
+    write_files, exclude_type_checking_imports, statement, is_statement_valid
 ):
     write_files(
         {
@@ -873,7 +872,7 @@ def test_exclude_type_checking_imports(
     ),
 )
 def test_exclude_type_checking_imports_only_excludes_type_checking_branches(
-    build_graph, write_files, code, expected_imported_modules
+    write_files, code, expected_imported_modules
 ):
     files = {"foo/__init__.py": ""}
     files.update({f"foo/{name}.py": "" for name in ("two", "three", "four", "five")})
@@ -893,7 +892,7 @@ def test_exclude_type_checking_imports_only_excludes_type_checking_branches(
     assert imported_modules == expected_imported_modules
 
 
-def test_t_string_syntax(build_graph, write_files):
+def test_t_string_syntax(write_files):
     write_files(
         {
             "foo/__init__.py": "",
@@ -926,9 +925,7 @@ def test_t_string_syntax(build_graph, write_files):
         "from ..nonexistent import something",
     ),
 )
-def test_missing_module_in_dotted_root_package_is_ignored(
-    build_graph, write_files, import_statement: str
-):
+def test_missing_module_in_dotted_root_package_is_ignored(write_files, import_statement: str):
     """
     When a dotted root package (namespace package) contains an import of a missing module
     within that same package, and include_external_packages=True, the Rust code should not

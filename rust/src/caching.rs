@@ -1,81 +1,10 @@
-use crate::errors::{GrimpError, GrimpResult};
-use crate::filesystem::{FileSystem, get_file_system_boxed};
-use crate::import_scanning::{DirectImport, imports_by_module_to_py};
+use crate::errors::GrimpResult;
+use crate::filesystem::FileSystem;
+use crate::import_scanning::DirectImport;
 use crate::module_finding::{FoundPackage, Module};
 use blake2::Blake2bVar;
 use blake2::digest::{Update, VariableOutput};
-use pyo3::types::PyAnyMethods;
-use pyo3::types::{PyDict, PySet};
-use pyo3::types::{PyDictMethods, PySetMethods};
-use pyo3::{Borrowed, Bound, FromPyObject, PyAny, PyErr, PyResult, Python, pyfunction};
 use std::collections::{HashMap, HashSet};
-
-/// Writes the cache file containing all the imports for a given package.
-/// Args:
-/// - filename: str
-/// - imports_by_module: dict[Module, Set[DirectImport]]
-/// - file_system: The file system interface to use. (A BasicFileSystem.)
-#[pyfunction]
-pub fn write_cache_data_map_file<'py>(
-    filename: &str,
-    imports_by_module: Bound<'py, PyDict>,
-    file_system: Bound<'py, PyAny>,
-) -> PyResult<()> {
-    let mut file_system_boxed = get_file_system_boxed(&file_system)?;
-
-    let ImportsByModule(imports_by_module_rust) = imports_by_module.extract()?;
-
-    let file_contents = serialize_imports_by_module(&imports_by_module_rust);
-
-    file_system_boxed.write(filename, &file_contents)?;
-
-    Ok(())
-}
-
-/// Reads the cache file containing all the imports for a given package.
-/// Args:
-/// - filename: str
-/// - file_system: The file system interface to use. (A BasicFileSystem.)
-/// Returns Dict[Module, Set[DirectImport]]
-#[pyfunction]
-pub fn read_cache_data_map_file<'py>(
-    py: Python<'py>,
-    filename: &str,
-    file_system: Bound<'py, PyAny>,
-) -> PyResult<Bound<'py, PyDict>> {
-    let file_system_boxed = get_file_system_boxed(&file_system)?;
-
-    let file_contents = file_system_boxed.read(filename)?;
-
-    let imports_by_module = parse_json_to_map(&file_contents, filename)?;
-
-    Ok(imports_by_module_to_py(py, imports_by_module))
-}
-
-/// A newtype wrapper for HashMap<Module, HashSet<DirectImport>> that implements FromPyObject.
-pub struct ImportsByModule(pub HashMap<Module, HashSet<DirectImport>>);
-
-impl<'a, 'py> FromPyObject<'a, 'py> for ImportsByModule {
-    type Error = PyErr;
-
-    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
-        let py_dict = ob.cast::<PyDict>()?;
-        let mut imports_by_module_rust = HashMap::new();
-
-        for (py_key, py_value) in py_dict.iter() {
-            let module: Module = py_key.extract()?;
-            let py_set = py_value.cast::<PySet>()?;
-            let mut hashset: HashSet<DirectImport> = HashSet::new();
-            for element in py_set.iter() {
-                let direct_import: DirectImport = element.extract()?;
-                hashset.insert(direct_import);
-            }
-            imports_by_module_rust.insert(module, hashset);
-        }
-
-        Ok(ImportsByModule(imports_by_module_rust))
-    }
-}
 
 /// The version of the data cache file format.
 ///
@@ -115,24 +44,18 @@ fn serialize_imports_by_module(
     serde_json::to_string(&envelope).expect("Failed to serialize to JSON")
 }
 
-pub fn parse_json_to_map(
-    json_str: &str,
-    filename: &str,
-) -> GrimpResult<HashMap<Module, HashSet<DirectImport>>> {
-    // Parse into a generic value first, so we can distinguish genuinely corrupt
-    // JSON from a cache file written by a different format version (e.g. by an
-    // older Grimp). The latter should be silently rebuilt, not warned about.
-    let value: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|_| GrimpError::CorruptCache(filename.to_string()))?;
+/// Parses the contents of a data file.
+///
+/// Returns None if it's corrupt, or was written by a different version of Grimp.
+fn parse_json_to_map(json_str: &str) -> Option<HashMap<Module, HashSet<DirectImport>>> {
+    let value: serde_json::Value = serde_json::from_str(json_str).ok()?;
 
-    let version = value.get("version").and_then(|v| v.as_u64());
-    if version != Some(CACHE_SCHEMA_VERSION as u64) {
-        return Err(GrimpError::CacheVersionMismatch(filename.to_string()));
+    if value.get("version").and_then(|v| v.as_u64()) != Some(CACHE_SCHEMA_VERSION as u64) {
+        return None;
     }
 
     let raw_map: HashMap<String, Vec<(String, bool, usize, String)>> =
-        serde_json::from_value(value.get("imports_by_module").cloned().unwrap_or_default())
-            .map_err(|_| GrimpError::CorruptCache(filename.to_string()))?;
+        serde_json::from_value(value.get("imports_by_module").cloned().unwrap_or_default()).ok()?;
 
     let mut parsed_map: HashMap<Module, HashSet<DirectImport>> = HashMap::new();
 
@@ -155,13 +78,13 @@ pub fn parse_json_to_map(
         parsed_map.insert(module, import_set);
     }
 
-    Ok(parsed_map)
+    Some(parsed_map)
 }
 
 /// A cache of the imports of each module, for building a graph.
 ///
-/// The files written are the same as those written by the Python `grimp.adaptors.caching.Cache`,
-/// so the two are interchangeable.
+/// The file names and formats must not change without good reason, so that caches written by
+/// earlier versions of Grimp can still be used.
 pub struct Cache<'a> {
     directory: &'a str,
     found_packages: &'a HashSet<FoundPackage>,
@@ -223,7 +146,8 @@ impl<'a> Cache<'a> {
         let data_file = self.file_path(file_system, &self.data_file_name);
         let imports_by_module = file_system
             .read(&data_file)
-            .and_then(|contents| parse_json_to_map(&contents, &data_file))
+            .ok()
+            .and_then(|contents| parse_json_to_map(&contents))
             .unwrap_or_default();
 
         imports_by_module

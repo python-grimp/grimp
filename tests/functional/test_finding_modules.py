@@ -1,5 +1,7 @@
 import pytest
 
+from grimp import build_graph
+
 # Files are empty unless stated otherwise.
 HAPPY_PATH_FILES = {
     "mypackage/__init__.py": "",
@@ -13,7 +15,7 @@ HAPPY_PATH_FILES = {
 }
 
 
-def test_happy_path(build_graph, write_files):
+def test_happy_path(write_files):
     write_files(HAPPY_PATH_FILES)
 
     graph = build_graph("mypackage", cache_dir=None)
@@ -70,7 +72,7 @@ MODULES_FOO_GREEN_FIVE = {
         ("somenamespace.foo.blue", MODULES_FOO_BLUE),
     ],
 )
-def test_namespaced_packages(build_graph, write_files, package_name, expected_modules):
+def test_namespaced_packages(write_files, package_name, expected_modules):
     write_files(NAMESPACE_FILES)
 
     graph = build_graph(package_name, cache_dir=None)
@@ -79,7 +81,7 @@ def test_namespaced_packages(build_graph, write_files, package_name, expected_mo
     assert graph.modules == expected_modules
 
 
-def test_ignores_orphaned_python_files(build_graph, write_files):
+def test_ignores_orphaned_python_files(write_files):
     # Python files in directories that don't contain an __init__.py should not be discovered.
     write_files(
         {
@@ -97,7 +99,7 @@ def test_ignores_orphaned_python_files(build_graph, write_files):
     assert graph.modules == {"mypackage", "mypackage.two", "mypackage.two.green"}
 
 
-def test_ignores_invalid_identifier_directories(build_graph, write_files):
+def test_ignores_invalid_identifier_directories(write_files):
     write_files(
         {
             f"namespacepackage/{path}": ""
@@ -133,7 +135,7 @@ def test_ignores_invalid_identifier_directories(build_graph, write_files):
 
 
 @pytest.mark.parametrize("extension", ("py", "txt"))
-def test_ignores_dotted_python_files(build_graph, write_files, extension):
+def test_ignores_dotted_python_files(write_files, extension):
     # Python files containing dots (other than the one before .py) should not be discovered.
     write_files(
         {
@@ -149,7 +151,7 @@ def test_ignores_dotted_python_files(build_graph, write_files, extension):
     assert graph.modules == {"mypackage", "mypackage.foo", "mypackage.bar"}
 
 
-def test_ignores_hidden_directories(build_graph, write_files):
+def test_ignores_hidden_directories(write_files):
     write_files(
         {
             "mypackage/__init__.py": "",
@@ -166,7 +168,7 @@ def test_ignores_hidden_directories(build_graph, write_files):
     assert graph.modules == {"mypackage", "mypackage.two", "mypackage.two.green"}
 
 
-def test_follows_symlinked_directories(build_graph, write_files, tmp_path):
+def test_follows_symlinked_directories(write_files, tmp_path):
     write_files(
         {
             "mypackage/__init__.py": "",

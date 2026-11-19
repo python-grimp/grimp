@@ -34,12 +34,6 @@ pub enum GrimpError {
         parse_error: RuffParseError,
     },
 
-    #[error("Could not use corrupt cache file {0}.")]
-    CorruptCache(String),
-
-    #[error("Cache file {0} was written by a different version of Grimp.")]
-    CacheVersionMismatch(String),
-
     #[error("{0}")]
     FileNotFound(String),
 
@@ -66,10 +60,6 @@ impl From<GrimpError> for PyErr {
             GrimpError::ParseError {
                 line_number, text, ..
             } => PyErr::new::<exceptions::ParseError, _>((line_number, text)),
-            GrimpError::CorruptCache(_) => exceptions::CorruptCache::new_err(value.to_string()),
-            GrimpError::CacheVersionMismatch(_) => {
-                exceptions::CacheVersionMismatch::new_err(value.to_string())
-            }
             GrimpError::FileNotFound(_) => PyFileNotFoundError::new_err(value.to_string()),
             // Not UnicodeDecodeError, as that can't be created from just a message.
             GrimpError::UndecodableFile(_) => PyUnicodeError::new_err(value.to_string()),

@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import shutil
 import tempfile
@@ -7,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import grimp
+from grimp import build_graph
 
 """
 For ease of reference, these are the imports of all the files:
@@ -44,7 +43,7 @@ def copied_cachingpackage():
     shutil.rmtree(str(PACKAGE_COPY_DESTINATION))
 
 
-def test_build_graph_uses_cache(build_graph, copied_cachingpackage):
+def test_build_graph_uses_cache(copied_cachingpackage):
     with tempfile.TemporaryDirectory() as cache_dir:
         graph = build_graph("cachingpackage", cache_dir=cache_dir)
 
@@ -111,7 +110,7 @@ def test_build_graph_uses_cache(build_graph, copied_cachingpackage):
         )
 
 
-def test_cache_preserves_is_lazy(build_graph):
+def test_cache_preserves_is_lazy():
     with tempfile.TemporaryDirectory() as cache_dir:
         # First build populates the cache from source.
         build_graph("lazyimports", cache_dir=cache_dir)
@@ -132,7 +131,7 @@ def test_cache_preserves_is_lazy(build_graph):
         ]
 
 
-def test_data_file_records_version_and_is_lazy(build_graph, copied_cachingpackage):
+def test_data_file_records_version_and_is_lazy(copied_cachingpackage):
     with tempfile.TemporaryDirectory() as cache_dir:
         build_graph("cachingpackage", cache_dir=cache_dir)
 
@@ -147,7 +146,7 @@ def test_data_file_records_version_and_is_lazy(build_graph, copied_cachingpackag
         ]
 
 
-def test_cache_with_different_version_is_rebuilt(build_graph, copied_cachingpackage, caplog):
+def test_cache_with_different_version_is_rebuilt(copied_cachingpackage):
     with tempfile.TemporaryDirectory() as cache_dir:
         build_graph("cachingpackage", cache_dir=cache_dir)
 
@@ -160,12 +159,9 @@ def test_cache_with_different_version_is_rebuilt(build_graph, copied_cachingpack
         }
         data_file.write_text(json.dumps(legacy))
 
-        with caplog.at_level(logging.INFO):
-            graph = build_graph("cachingpackage", cache_dir=cache_dir)
+        graph = build_graph("cachingpackage", cache_dir=cache_dir)
 
-        # The mismatched cache is ignored (not treated as corrupt) and rebuilt from source.
-        if build_graph is grimp.build_graph:  # Only the Python implementation logs.
-            assert any("different version of Grimp" in record.message for record in caplog.records)
+        # The mismatched cache is ignored and rebuilt from source.
         assert graph.get_import_details(
             importer="cachingpackage.two.alpha",
             imported="cachingpackage.one.alpha",
@@ -178,32 +174,6 @@ def test_cache_with_different_version_is_rebuilt(build_graph, copied_cachingpack
                 "line_number": 1,
             }
         ]
-
-
-@pytest.mark.parametrize(
-    "build_graph_writing_cache, build_graph_reading_cache",
-    (
-        (grimp.build_graph, grimp.build_graph_rust),
-        (grimp.build_graph_rust, grimp.build_graph),
-    ),
-)
-def test_cache_is_shared_between_implementations(
-    copied_cachingpackage, build_graph_writing_cache, build_graph_reading_cache
-):
-    with tempfile.TemporaryDirectory() as cache_dir:
-        build_graph_writing_cache("cachingpackage", cache_dir=cache_dir)
-
-        data_file = Path(cache_dir) / "27aa562ad2a4745eb20ecf156430dbfeb0e90610.data.json"
-        snippet = "from ..one import alpha"
-        replacement = snippet + "  # Inserted by test"
-        _manipulate_data_file(data_file, snippet, replacement)
-
-        graph = build_graph_reading_cache("cachingpackage", cache_dir=cache_dir)
-
-        [import_details] = graph.get_import_details(
-            importer="cachingpackage.two.alpha", imported="cachingpackage.one.alpha"
-        )
-        assert import_details["line_contents"] == replacement
 
 
 def _manipulate_data_file(data_file: Path, snippet: str, replacement: str) -> None:
@@ -274,7 +244,6 @@ class TestCacheFiles:
     )
     def test_file_names(
         self,
-        build_graph,
         write_files,
         cache_dir,
         package_names,
@@ -316,7 +285,6 @@ class TestCacheFiles:
     )
     def test_contents(
         self,
-        build_graph,
         write_files,
         cache_dir,
         cache_dir_suffix,
@@ -375,7 +343,7 @@ class TestCacheFiles:
             "greenpackage.two": {("greenpackage.one", False, 1, "from . import one")},
         }
 
-    def test_default_cache_dir(self, build_graph, write_files, tmp_path, monkeypatch):
+    def test_default_cache_dir(self, write_files, tmp_path, monkeypatch):
         write_files({"bluepackage/__init__.py": ""})
         monkeypatch.chdir(tmp_path)
 
@@ -383,7 +351,7 @@ class TestCacheFiles:
 
         assert (tmp_path / ".grimp_cache" / "bluepackage.meta.json").exists()
 
-    def test_adds_marker_files(self, build_graph, write_files, cache_dir):
+    def test_adds_marker_files(self, write_files, cache_dir):
         write_files({"bluepackage/__init__.py": ""})
 
         build_graph("bluepackage", cache_dir=str(cache_dir))
@@ -395,7 +363,7 @@ class TestCacheFiles:
             "# For information about cache directory tags see https://bford.info/cachedir/"
         )
 
-    def test_doesnt_overwrite_marker_files(self, build_graph, write_files, cache_dir):
+    def test_doesnt_overwrite_marker_files(self, write_files, cache_dir):
         write_files({"bluepackage/__init__.py": ""})
         cache_dir.mkdir()
         (cache_dir / ".gitignore").write_text("Something else")
@@ -406,7 +374,7 @@ class TestCacheFiles:
 
 
 class TestCacheUse:
-    def test_uses_cache_for_unmodified_module(self, build_graph, write_files, cache_dir):
+    def test_uses_cache_for_unmodified_module(self, write_files, cache_dir):
         write_files(MYPACKAGE_FILES)
         build_graph("mypackage", cache_dir=str(cache_dir))
         _insert_marker_in_cache(cache_dir)
@@ -417,9 +385,7 @@ class TestCacheUse:
             "from . import two" + MARKER
         )
 
-    def test_ignores_cache_for_module_with_different_mtime(
-        self, build_graph, write_files, cache_dir
-    ):
+    def test_ignores_cache_for_module_with_different_mtime(self, write_files, cache_dir):
         root = write_files(MYPACKAGE_FILES)
         build_graph("mypackage", cache_dir=str(cache_dir))
         _insert_marker_in_cache(cache_dir)
@@ -432,7 +398,7 @@ class TestCacheUse:
         assert _line_contents(graph, "mypackage.one", "mypackage.two") == "from . import two"
         assert _line_contents(graph, "mypackage.two", "mypackage.three") == "from . import three"
 
-    def test_ignores_cache_for_new_module(self, build_graph, write_files, cache_dir):
+    def test_ignores_cache_for_new_module(self, write_files, cache_dir):
         write_files(MYPACKAGE_FILES)
         build_graph("mypackage", cache_dir=str(cache_dir))
         write_files({"mypackage/four.py": "from . import one"})
@@ -441,9 +407,7 @@ class TestCacheUse:
 
         assert graph.direct_import_exists(importer="mypackage.four", imported="mypackage.one")
 
-    def test_ignores_cache_for_module_with_no_cached_mtime(
-        self, build_graph, write_files, cache_dir
-    ):
+    def test_ignores_cache_for_module_with_no_cached_mtime(self, write_files, cache_dir):
         write_files(MYPACKAGE_FILES)
         build_graph("mypackage", cache_dir=str(cache_dir))
         _insert_marker_in_cache(cache_dir)
@@ -456,7 +420,7 @@ class TestCacheUse:
 
         assert _line_contents(graph, "mypackage.one", "mypackage.two") == "from . import two"
 
-    def test_ignores_cache_for_module_missing_from_data(self, build_graph, write_files, cache_dir):
+    def test_ignores_cache_for_module_missing_from_data(self, write_files, cache_dir):
         write_files(MYPACKAGE_FILES)
         build_graph("mypackage", cache_dir=str(cache_dir))
         data_file = _data_file(cache_dir)
@@ -475,7 +439,7 @@ class TestCacheUse:
             '{"mypackage.one": ["wrong", "type"]}',
         ),
     )
-    def test_ignores_corrupt_meta_file(self, build_graph, write_files, cache_dir, serialized_meta):
+    def test_ignores_corrupt_meta_file(self, write_files, cache_dir, serialized_meta):
         write_files(MYPACKAGE_FILES)
         build_graph("mypackage", cache_dir=str(cache_dir))
         _insert_marker_in_cache(cache_dir)
@@ -492,7 +456,7 @@ class TestCacheUse:
             '{"version": 2, "imports_by_module": {"mypackage.one": [["wrong", "type"]]}}',
         ),
     )
-    def test_ignores_corrupt_data_file(self, build_graph, write_files, cache_dir, serialized_data):
+    def test_ignores_corrupt_data_file(self, write_files, cache_dir, serialized_data):
         write_files(MYPACKAGE_FILES)
         build_graph("mypackage", cache_dir=str(cache_dir))
         _data_file(cache_dir).write_text(serialized_data)
@@ -515,7 +479,7 @@ class TestCacheUse:
         ),
     )
     def test_doesnt_use_cache_for_different_packages_or_options(
-        self, build_graph, write_files, cache_dir, package_names, options
+        self, write_files, cache_dir, package_names, options
     ):
         write_files(MYPACKAGE_FILES | ANOTHERPACKAGE_FILES)
         build_graph("mypackage", cache_dir=str(cache_dir))
@@ -527,7 +491,7 @@ class TestCacheUse:
 
     @pytest.mark.parametrize("include_external_packages", (False, True))
     def test_uses_cache_for_multiple_packages(
-        self, build_graph, write_files, cache_dir, include_external_packages
+        self, write_files, cache_dir, include_external_packages
     ):
         write_files(MYPACKAGE_FILES | ANOTHERPACKAGE_FILES)
         kwargs = dict(

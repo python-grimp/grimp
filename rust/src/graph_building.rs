@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 
 /// Builds an import graph of the supplied packages.
 ///
-/// This is the Rust equivalent of `grimp.application.usecases.build_graph`.
+/// This is called by `grimp.application.usecases.build_graph`.
 ///
 /// Args:
 /// - packages: (name, directory) of each package. A package may have more than one directory.
