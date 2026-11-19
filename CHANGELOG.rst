@@ -2,6 +2,11 @@
 Changelog
 =========
 
+latest
+------
+
+* Add ``build_graph_rust``, a faster alternative to ``build_graph`` that does everything in Rust.
+
 3.20 (2026-11-13)
 -----------------
 
