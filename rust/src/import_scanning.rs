@@ -420,39 +420,39 @@ pub fn scan_for_imports<'py>(
         })
         .collect();
 
-    let imports_by_module_result = py.detach(|| {
-        scan_for_imports_no_py(
-            &file_system_boxed,
-            &found_packages_rust,
-            include_external_packages,
-            &modules_rust,
-            exclude_type_checking_imports,
-        )
-    });
+    let imports_by_module = py
+        .detach(|| {
+            scan_for_imports_no_py(
+                &file_system_boxed,
+                &found_packages_rust,
+                include_external_packages,
+                &modules_rust,
+                exclude_type_checking_imports,
+            )
+        })
+        .map_err(|e| into_py_err(py, e))?;
 
-    match imports_by_module_result {
-        Err(GrimpError::ParseError {
+    Ok(imports_by_module_to_py(py, imports_by_module))
+}
+
+/// Convert a `GrimpError` to a Python exception, translating syntax errors in the scanned
+/// source code to `grimp.exceptions.SourceSyntaxError`.
+pub fn into_py_err(py: Python, error: GrimpError) -> PyErr {
+    match error {
+        GrimpError::ParseError {
             module_filename,
             line_number,
             text,
             ..
-        }) => {
+        } => {
             // TODO: define SourceSyntaxError using pyo3.
             let exceptions_pymodule = PyModule::import(py, "grimp.exceptions").unwrap();
             let py_exception_class = exceptions_pymodule.getattr("SourceSyntaxError").unwrap();
             let exception = py_exception_class
                 .call1((module_filename, line_number, text))
                 .unwrap();
-            return Err(PyErr::from_value(exception));
+            PyErr::from_value(exception)
         }
-        Err(e) => {
-            return Err(e.into());
-        }
-        _ => (),
+        e => e.into(),
     }
-    let imports_by_module = imports_by_module_result.unwrap();
-
-    let imports_by_module_py = imports_by_module_to_py(py, imports_by_module);
-
-    Ok(imports_by_module_py)
 }
