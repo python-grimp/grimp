@@ -134,10 +134,16 @@ def test_ignores_invalid_identifier_directories(write_files):
     }
 
 
-@pytest.mark.parametrize("extension", ("py", "txt"))
-def test_ignores_dotted_python_files(write_files, extension):
+@pytest.mark.parametrize(
+    "extension, should_warn",
+    (
+        ("py", True),
+        ("txt", False),  # Anything other than .py.
+    ),
+)
+def test_ignores_dotted_python_files(write_files, caplog, extension, should_warn):
     # Python files containing dots (other than the one before .py) should not be discovered.
-    write_files(
+    root = write_files(
         {
             "mypackage/__init__.py": "",
             "mypackage/foo.py": "",
@@ -149,6 +155,13 @@ def test_ignores_dotted_python_files(write_files, extension):
     graph = build_graph("mypackage", cache_dir=None)
 
     assert graph.modules == {"mypackage", "mypackage.foo", "mypackage.bar"}
+    if should_warn:
+        assert caplog.messages == [
+            "Warning: skipping module with too many dots in the name: "
+            f"{root / 'mypackage' / 'bar' / f'baz.dotted.{extension}'}"
+        ]
+    else:
+        assert caplog.messages == []
 
 
 def test_ignores_hidden_directories(write_files):

@@ -1,4 +1,5 @@
 use crate::errors::GrimpResult;
+use crate::log_records::LogRecord;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::fs;
@@ -33,7 +34,11 @@ pub struct FoundPackage {
     pub namespace_packages: BTreeSet<Module>,
 }
 
+const LOGGER: &str = "grimp.adaptors.modulefinder";
+
 /// Finds the modules and namespace packages inside a package directory.
+///
+/// Anything to be logged is added to `log`.
 ///
 /// Also returns the mtime of each module's file (keyed by module name), in the same form as
 /// Python's `os.path.getmtime`, so that caches written by earlier versions of Grimp (which used
@@ -41,6 +46,7 @@ pub struct FoundPackage {
 pub fn find_package(
     name: &str,
     directory: &str,
+    log: &mut Vec<LogRecord>,
 ) -> GrimpResult<(FoundPackage, HashMap<String, f64>)> {
     let mut python_files = vec![];
     let mut namespace_dirs = vec![];
@@ -49,6 +55,7 @@ pub fn find_package(
         false,
         &mut python_files,
         &mut namespace_dirs,
+        log,
     )?;
 
     let module_name = |path: &Path| -> String {
@@ -99,6 +106,7 @@ fn walk(
     in_regular_package: bool,
     python_files: &mut Vec<PathBuf>,
     namespace_dirs: &mut Vec<PathBuf>,
+    log: &mut Vec<LogRecord>,
 ) -> GrimpResult<()> {
     let mut file_names = vec![];
     let mut subdirectories = vec![];
@@ -124,15 +132,25 @@ fn walk(
     let in_regular_package = in_regular_package || has_init;
 
     let python_files_before = python_files.len();
-    python_files.extend(
-        file_names
-            .iter()
-            .filter(|name| is_python_file(name))
-            .map(|name| directory.join(name)),
-    );
+    for name in &file_names {
+        // Hidden files, and files like `some.module.py`, aren't treated as Python files.
+        if name.ends_with(".py") && !name.starts_with('.') {
+            if name.matches('.').count() == 1 {
+                python_files.push(directory.join(name));
+            } else {
+                log.push(LogRecord::warning(
+                    LOGGER,
+                    format!(
+                        "Warning: skipping module with too many dots in the name: {}",
+                        directory.join(name).display()
+                    ),
+                ));
+            }
+        }
+    }
     for (name, path) in &subdirectories {
         if is_identifier(name) {
-            walk(path, in_regular_package, python_files, namespace_dirs)?;
+            walk(path, in_regular_package, python_files, namespace_dirs, log)?;
         }
     }
 
@@ -140,11 +158,6 @@ fn walk(
         namespace_dirs.push(directory.to_path_buf());
     }
     Ok(())
-}
-
-/// Files like `some.module.py` and hidden files aren't treated as Python files.
-fn is_python_file(name: &str) -> bool {
-    name.ends_with(".py") && !name.starts_with('.') && name.matches('.').count() == 1
 }
 
 /// Equivalent to Python's `str.isidentifier`.

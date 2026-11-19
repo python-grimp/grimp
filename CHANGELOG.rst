@@ -7,7 +7,6 @@ latest
 
 * Speed up ``build_graph`` by building the graph in Rust. This includes finding the modules, reading
   and writing the cache, and assembling the graph. The cache files are unchanged.
-* ``build_graph`` no longer logs messages about the cache, or about skipping modules with dots in their name.
 
 3.20 (2026-11-13)
 -----------------

@@ -3,9 +3,13 @@ use crate::errors::GrimpResult;
 use crate::filesystem::real_file_system;
 use crate::graph::{Graph, GraphWrapper};
 use crate::import_scanning::{DirectImport, into_py_err, scan_for_imports_no_py};
+use crate::log_records::LogRecord;
 use crate::module_finding::{FoundPackage, Module, find_package};
 use pyo3::prelude::*;
 use std::collections::{HashMap, HashSet};
+
+/// A `LogRecord` as returned to Python: (logger name, logging method name, message).
+type PyLogRecord = (&'static str, &'static str, String);
 
 /// Builds an import graph of the supplied packages.
 ///
@@ -16,6 +20,9 @@ use std::collections::{HashMap, HashSet};
 /// - include_external_packages: whether to include imports of external modules.
 /// - exclude_type_checking_imports: whether to exclude imports behind TYPE_CHECKING guards.
 /// - cache_dir: the directory to use for caching, or None for no caching.
+///
+/// Returns the graph, and the messages for the caller to log, as Rust can't use Python's logging
+/// directly.
 #[pyfunction]
 pub fn build_graph(
     py: Python,
@@ -23,7 +30,7 @@ pub fn build_graph(
     include_external_packages: bool,
     exclude_type_checking_imports: bool,
     cache_dir: Option<String>,
-) -> PyResult<GraphWrapper> {
+) -> PyResult<(GraphWrapper, Vec<PyLogRecord>)> {
     py.detach(|| {
         build_graph_no_py(
             &packages,
@@ -32,7 +39,13 @@ pub fn build_graph(
             cache_dir.as_deref(),
         )
     })
-    .map(GraphWrapper::from_graph)
+    .map(|(graph, log)| {
+        let log = log
+            .into_iter()
+            .map(|record| (record.logger, record.level, record.message))
+            .collect();
+        (GraphWrapper::from_graph(graph), log)
+    })
     .map_err(|e| into_py_err(py, e))
 }
 
@@ -41,14 +54,15 @@ fn build_graph_no_py(
     include_external_packages: bool,
     exclude_type_checking_imports: bool,
     cache_dir: Option<&str>,
-) -> GrimpResult<Graph> {
+) -> GrimpResult<(Graph, Vec<LogRecord>)> {
     let mut file_system = real_file_system();
+    let mut log = vec![];
 
     // Find the modules.
     let mut found_packages = HashSet::new();
     let mut mtimes = HashMap::new();
     for (name, directory) in packages {
-        let (found_package, package_mtimes) = find_package(name, directory)?;
+        let (found_package, package_mtimes) = find_package(name, directory, &mut log)?;
         found_packages.insert(found_package);
         mtimes.extend(package_mtimes);
     }
@@ -63,7 +77,7 @@ fn build_graph_no_py(
         )
     });
     let mut imports_by_module = match &cache {
-        Some(cache) => cache.read(&*file_system, &mtimes),
+        Some(cache) => cache.read(&*file_system, &mtimes, &mut log),
         None => HashMap::new(),
     };
     let modules_to_scan: HashSet<Module> = found_packages
@@ -82,10 +96,10 @@ fn build_graph_no_py(
         )?);
     }
     if let Some(cache) = &cache {
-        cache.write(&mut *file_system, &mtimes, &imports_by_module)?;
+        cache.write(&mut *file_system, &mtimes, &imports_by_module, &mut log)?;
     }
 
-    Ok(assemble_graph(&found_packages, &imports_by_module))
+    Ok((assemble_graph(&found_packages, &imports_by_module), log))
 }
 
 fn assemble_graph(

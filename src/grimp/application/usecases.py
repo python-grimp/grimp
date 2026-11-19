@@ -4,6 +4,7 @@ Use cases handle application logic.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from typing import cast
 
@@ -57,13 +58,17 @@ def build_graph(
     if cache_dir is NotSupplied:
         cache_dir = DEFAULT_CACHE_DIR
 
-    rust_graph = rust.build_graph(
+    rust_graph, log_records = rust.build_graph(
         packages,
         # Tolerate a non-boolean (Import Linter has been known to pass None).
         include_external_packages=bool(include_external_packages),
         exclude_type_checking_imports=exclude_type_checking_imports,
         cache_dir=cache_dir,
     )
+    # Rust can't use Python's logging, so it returns what should be logged.
+    for logger_name, level, message in log_records:
+        getattr(logging.getLogger(logger_name), level)(message)
+
     return ImportGraph.from_rustgraph(rust_graph)
 
 

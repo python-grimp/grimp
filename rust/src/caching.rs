@@ -1,10 +1,13 @@
-use crate::errors::GrimpResult;
+use crate::errors::{GrimpError, GrimpResult};
 use crate::filesystem::FileSystem;
 use crate::import_scanning::DirectImport;
+use crate::log_records::LogRecord;
 use crate::module_finding::{FoundPackage, Module};
 use blake2::Blake2bVar;
 use blake2::digest::{Update, VariableOutput};
 use std::collections::{HashMap, HashSet};
+
+const LOGGER: &str = "grimp.adaptors.caching";
 
 /// The version of the data cache file format.
 ///
@@ -44,18 +47,24 @@ fn serialize_imports_by_module(
     serde_json::to_string(&envelope).expect("Failed to serialize to JSON")
 }
 
+/// Why the contents of a cache file can't be used.
+enum Unusable {
+    Corrupt,
+    /// The file was written by a different version of Grimp.
+    DifferentVersion,
+}
+
 /// Parses the contents of a data file.
-///
-/// Returns None if it's corrupt, or was written by a different version of Grimp.
-fn parse_json_to_map(json_str: &str) -> Option<HashMap<Module, HashSet<DirectImport>>> {
-    let value: serde_json::Value = serde_json::from_str(json_str).ok()?;
+fn parse_json_to_map(json_str: &str) -> Result<HashMap<Module, HashSet<DirectImport>>, Unusable> {
+    let value: serde_json::Value = serde_json::from_str(json_str).map_err(|_| Unusable::Corrupt)?;
 
     if value.get("version").and_then(|v| v.as_u64()) != Some(CACHE_SCHEMA_VERSION as u64) {
-        return None;
+        return Err(Unusable::DifferentVersion);
     }
 
     let raw_map: HashMap<String, Vec<(String, bool, usize, String)>> =
-        serde_json::from_value(value.get("imports_by_module").cloned().unwrap_or_default()).ok()?;
+        serde_json::from_value(value.get("imports_by_module").cloned().unwrap_or_default())
+            .map_err(|_| Unusable::Corrupt)?;
 
     let mut parsed_map: HashMap<Module, HashSet<DirectImport>> = HashMap::new();
 
@@ -78,7 +87,46 @@ fn parse_json_to_map(json_str: &str) -> Option<HashMap<Module, HashSet<DirectImp
         parsed_map.insert(module, import_set);
     }
 
-    Some(parsed_map)
+    Ok(parsed_map)
+}
+
+/// Reads and parses a cache file, logging what happened.
+///
+/// Returns None if the file can't be used.
+fn read_cache_file<T>(
+    file_system: &dyn FileSystem,
+    file: &str,
+    kind: &str,
+    parse: impl FnOnce(&str) -> Result<T, Unusable>,
+    log: &mut Vec<LogRecord>,
+) -> Option<T> {
+    let unusable = match file_system.read(file) {
+        Ok(contents) => match parse(&contents) {
+            Ok(value) => {
+                log.push(LogRecord::info(
+                    LOGGER,
+                    format!("Used cache {kind} file {file}."),
+                ));
+                return Some(value);
+            }
+            Err(unusable) => unusable,
+        },
+        Err(GrimpError::FileNotFound(_)) => {
+            log.push(LogRecord::info(LOGGER, format!("No cache file: {file}.")));
+            return None;
+        }
+        Err(_) => Unusable::Corrupt,
+    };
+    log.push(match unusable {
+        Unusable::Corrupt => {
+            LogRecord::warning(LOGGER, format!("Could not use corrupt cache file {file}."))
+        }
+        Unusable::DifferentVersion => LogRecord::info(
+            LOGGER,
+            format!("Cache file {file} was written by a different version of Grimp; rebuilding."),
+        ),
+    });
+    None
 }
 
 /// A cache of the imports of each module, for building a graph.
@@ -128,27 +176,29 @@ impl<'a> Cache<'a> {
     ///
     /// Args:
     /// - mtimes: the current modification time of each module, by module name.
+    /// - log: anything to be logged is added to this.
     pub fn read(
         &self,
         file_system: &dyn FileSystem,
         mtimes: &HashMap<String, f64>,
+        log: &mut Vec<LogRecord>,
     ) -> HashMap<Module, HashSet<DirectImport>> {
         let mut cached_mtimes: HashMap<String, f64> = HashMap::new();
         for found_package in self.found_packages {
             let meta_file = self.file_path(file_system, &meta_file_name(found_package));
-            let package_mtimes = file_system
-                .read(&meta_file)
-                .ok()
-                .and_then(|contents| serde_json::from_str::<HashMap<String, f64>>(&contents).ok());
-            cached_mtimes.extend(package_mtimes.unwrap_or_default());
+            let parse = |contents: &str| {
+                serde_json::from_str::<HashMap<String, f64>>(contents)
+                    .map_err(|_| Unusable::Corrupt)
+            };
+            cached_mtimes.extend(
+                read_cache_file(file_system, &meta_file, "meta", parse, log).unwrap_or_default(),
+            );
         }
 
         let data_file = self.file_path(file_system, &self.data_file_name);
-        let imports_by_module = file_system
-            .read(&data_file)
-            .ok()
-            .and_then(|contents| parse_json_to_map(&contents))
-            .unwrap_or_default();
+        let imports_by_module =
+            read_cache_file(file_system, &data_file, "data", parse_json_to_map, log)
+                .unwrap_or_default();
 
         imports_by_module
             .into_iter()
@@ -165,6 +215,7 @@ impl<'a> Cache<'a> {
         file_system: &mut dyn FileSystem,
         mtimes: &HashMap<String, f64>,
         imports_by_module: &HashMap<Module, HashSet<DirectImport>>,
+        log: &mut Vec<LogRecord>,
     ) -> GrimpResult<()> {
         for (file_name, contents) in MARKER_FILES {
             let path = self.file_path(file_system, file_name);
@@ -175,6 +226,10 @@ impl<'a> Cache<'a> {
 
         let data_file = self.file_path(file_system, &self.data_file_name);
         file_system.write(&data_file, &serialize_imports_by_module(imports_by_module))?;
+        log.push(LogRecord::info(
+            LOGGER,
+            format!("Wrote data cache file {data_file}."),
+        ));
 
         for found_package in self.found_packages {
             let package_mtimes: HashMap<&str, f64> = found_package
@@ -188,6 +243,10 @@ impl<'a> Cache<'a> {
             let meta_file = self.file_path(file_system, &meta_file_name(found_package));
             let contents = serde_json::to_string(&package_mtimes).expect("Failed to serialize");
             file_system.write(&meta_file, &contents)?;
+            log.push(LogRecord::info(
+                LOGGER,
+                format!("Wrote meta cache file {meta_file}."),
+            ));
         }
         Ok(())
     }

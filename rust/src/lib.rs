@@ -6,6 +6,7 @@ pub mod graph;
 mod graph_building;
 pub mod import_parsing;
 mod import_scanning;
+mod log_records;
 pub mod module_expressions;
 mod module_finding;
 

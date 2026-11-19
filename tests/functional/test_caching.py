@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import shutil
 import tempfile
@@ -146,7 +147,7 @@ def test_data_file_records_version_and_is_lazy(copied_cachingpackage):
         ]
 
 
-def test_cache_with_different_version_is_rebuilt(copied_cachingpackage):
+def test_cache_with_different_version_is_rebuilt(copied_cachingpackage, caplog):
     with tempfile.TemporaryDirectory() as cache_dir:
         build_graph("cachingpackage", cache_dir=cache_dir)
 
@@ -159,9 +160,11 @@ def test_cache_with_different_version_is_rebuilt(copied_cachingpackage):
         }
         data_file.write_text(json.dumps(legacy))
 
-        graph = build_graph("cachingpackage", cache_dir=cache_dir)
+        with caplog.at_level(logging.INFO):
+            graph = build_graph("cachingpackage", cache_dir=cache_dir)
 
-        # The mismatched cache is ignored and rebuilt from source.
+        # The mismatched cache is ignored (not treated as corrupt) and rebuilt from source.
+        assert any("different version of Grimp" in record.message for record in caplog.records)
         assert graph.get_import_details(
             importer="cachingpackage.two.alpha",
             imported="cachingpackage.one.alpha",
@@ -512,3 +515,59 @@ class TestCacheUse:
         if include_external_packages:
             expected_imports.add("externalpackage")
         assert graph.find_modules_directly_imported_by("anotherpackage.one") == expected_imports
+
+
+class TestCacheLogging:
+    @pytest.fixture(autouse=True)
+    def set_log_level(self, caplog):
+        caplog.set_level(logging.INFO, logger="grimp.adaptors.caching")
+
+    def test_logs_missing_cache_files(self, write_files, cache_dir, caplog):
+        write_files(MYPACKAGE_FILES)
+
+        build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert caplog.messages == [
+            f"No cache file: {cache_dir / 'mypackage.meta.json'}.",
+            f"No cache file: {_data_file(cache_dir)}.",
+            f"Wrote data cache file {_data_file(cache_dir)}.",
+            f"Wrote meta cache file {cache_dir / 'mypackage.meta.json'}.",
+        ]
+
+    def test_logs_successful_cache_file_reading(self, write_files, cache_dir, caplog):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        caplog.clear()
+
+        build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert caplog.messages == [
+            f"Used cache meta file {cache_dir / 'mypackage.meta.json'}.",
+            f"Used cache data file {_data_file(cache_dir)}.",
+            f"Wrote data cache file {_data_file(cache_dir)}.",
+            f"Wrote meta cache file {cache_dir / 'mypackage.meta.json'}.",
+        ]
+
+    def test_logs_corrupt_cache_meta_file(self, write_files, cache_dir, caplog):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        (cache_dir / "mypackage.meta.json").write_text("INVALID_JSON")
+        caplog.clear()
+        caplog.set_level(logging.WARNING, logger="grimp.adaptors.caching")
+
+        build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert caplog.messages == [
+            f"Could not use corrupt cache file {cache_dir / 'mypackage.meta.json'}.",
+        ]
+
+    def test_logs_corrupt_cache_data_file(self, write_files, cache_dir, caplog):
+        write_files(MYPACKAGE_FILES)
+        build_graph("mypackage", cache_dir=str(cache_dir))
+        _data_file(cache_dir).write_text("INVALID_JSON")
+        caplog.clear()
+        caplog.set_level(logging.WARNING, logger="grimp.adaptors.caching")
+
+        build_graph("mypackage", cache_dir=str(cache_dir))
+
+        assert caplog.messages == [f"Could not use corrupt cache file {_data_file(cache_dir)}."]
